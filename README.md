@@ -33,6 +33,33 @@ The package grows out of two workarounds in
 shiny’s internals. The other is the `reactives` class, which holds the
 computed inputs of variadic blocks.
 
+## Usage
+
+``` r
+library(shiny)
+library(reactives)
+
+x <- reactives(a = reactiveVal(1), b = reactive(2 * 21))
+
+# Reading a slot returns its reactive; call it for the value
+isolate(x$a())
+#> [1] 1
+
+# A slot that doesn't exist reads as NULL, as on a list
+isolate(is.null(x$c))
+#> [1] TRUE
+
+# Assigning a reactive adds or replaces a slot, and assigning NULL removes it
+x$c <- reactiveVal("new")
+x$a <- NULL
+isolate(names(x))
+#> [1] "b" "c"
+```
+
+Inside an observer or a `reactive()`, reading a slot creates a
+dependency on that slot alone. The reader re-runs when that slot is
+added, replaced or removed, but not when other slots change.
+
 ## Status
 
 Under development. Planned work is tracked in the
