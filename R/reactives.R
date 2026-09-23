@@ -22,6 +22,13 @@
 #' slots at once, taking `NULL`, a single reactive, or a list with one element
 #' per selected slot.
 #'
+#' Subscripts follow the rules of the vctrs package, which are stricter than
+#' base R's. Positions must be whole numbers within range, negative and
+#' positive positions can't be mixed, a logical subscript must be size 1 or
+#' match the number of slots, and unknown names, empty strings and missing
+#' values are errors. A list assigned with `[<-` is only recycled from size 1.
+#' Reading a missing name with `[[` or `$` still returns `NULL`, as on a list.
+#'
 #' @section Sharing:
 #' A collection is shared, like [shiny::reactiveValues()]: after `y <- x`, both
 #' names refer to the same collection, and a change made through `$<-`,
@@ -282,100 +289,6 @@ display_names <- function(keys) {
   replace(keys, pos, "")
 }
 
-is_name <- function(i) {
-  is.character(i) && length(i) == 1L && !is.na(i) && nzchar(i)
-}
-
-is_position <- function(i) {
-  is.numeric(i) && length(i) == 1L && !is.na(i) && i >= 1 && i == trunc(i)
-}
-
-bad_index <- function() {
-  abort(
-    "A slot is indexed by a single name or position.",
-    "reactives_bad_index"
-  )
-}
-
-out_of_bounds <- function(i, n) {
-  abort(
-    sprintf("Position %d is beyond the %d slot(s).", i, n),
-    "reactives_out_of_bounds"
-  )
-}
-
-select_positions <- function(keys, i) {
-
-  if (!is.numeric(i) && !is.logical(i)) {
-    abort(
-      "Slots are selected by names, positions or a logical vector.",
-      "reactives_bad_index"
-    )
-  }
-
-  pos <- seq_along(keys)[i]
-
-  if (anyNA(pos)) {
-    abort("Positions must lie within the slots.", "reactives_out_of_bounds")
-  }
-
-  keys[pos]
-}
-
-select_keys <- function(keys, i) {
-
-  if (!is.character(i)) {
-    return(select_positions(keys, i))
-  }
-
-  unknown <- setdiff(i, keys[!is_positional_key(keys)])
-
-  if (length(unknown)) {
-    abort(
-      paste0("Unknown slot names: ", paste(unknown, collapse = ", "), "."),
-      "reactives_unknown_name"
-    )
-  }
-
-  i
-}
-
-target_keys <- function(keys, i) {
-
-  if (!is.character(i)) {
-    return(select_positions(keys, i))
-  }
-
-  if (anyNA(i) || !all(nzchar(i))) {
-    abort("Slot names must be non-empty strings.", "reactives_bad_index")
-  }
-
-  i
-}
-
-target_values <- function(value, n) {
-
-  if (is.null(value)) {
-    return(rep(list(NULL), n))
-  }
-
-  if (is.reactive(value)) {
-    return(rep(list(value), n))
-  }
-
-  if (is.list(value) && length(value) %in% c(1L, n)) {
-    return(rep_len(value, n))
-  }
-
-  abort(
-    paste(
-      "Assign `NULL`, a single reactive, or a list with one element per",
-      "selected slot."
-    ),
-    "reactives_bad_value"
-  )
-}
-
 #' @export
 `$.reactives` <- function(x, name) {
   get_slot(x, name)
@@ -384,12 +297,10 @@ target_values <- function(value, n) {
 #' @export
 `[[.reactives` <- function(x, i) {
 
-  if (is_name(i)) {
-    return(get_slot(x, i))
-  }
+  i <- index2(i)
 
-  if (!is_position(i)) {
-    bad_index()
+  if (is.character(i)) {
+    return(get_slot(x, i))
   }
 
   keys <- raw_keys(x)
@@ -409,12 +320,10 @@ target_values <- function(value, n) {
 #' @export
 `[[<-.reactives` <- function(x, i, value) {
 
-  if (is_name(i)) {
-    return(assign_slot(x, i, value))
-  }
+  i <- index2(i)
 
-  if (!is_position(i)) {
-    bad_index()
+  if (is.character(i)) {
+    return(assign_slot(x, i, value))
   }
 
   keys <- isolate(raw_keys(x))
@@ -452,7 +361,7 @@ target_values <- function(value, n) {
 
   keys <- isolate(raw_keys(x))
   targets <- if (missing(i)) keys else target_keys(keys, i)
-  values <- target_values(value, length(targets))
+  values <- recycle_values(value, length(targets))
 
   # Check every value before binding any, so that a bad element leaves the
   # collection unchanged.

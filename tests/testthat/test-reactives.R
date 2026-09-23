@@ -590,3 +590,41 @@ test_that("reactive_vals() only accepts reactiveVal slots", {
     }
   )
 })
+
+test_that("subscripts follow vctrs' rules rather than base R's", {
+
+  with_session(
+    {
+      x <- reactive_vals(a = 1, b = 2, 3)
+
+      expect_error(x[1.5], class = "reactives_bad_index")
+      expect_error(x[Inf], class = "reactives_bad_index")
+      expect_error(x[c(1, NA)], class = "reactives_bad_index")
+      expect_error(x[c(-1, 2)], class = "reactives_bad_index")
+      expect_error(x[-5], class = "reactives_out_of_bounds")
+      expect_error(x[c(TRUE, FALSE)], class = "reactives_bad_index")
+      expect_error(x[""], class = "reactives_bad_index")
+      expect_error(x[list(1)], class = "reactives_bad_index")
+
+      expect_identical(names(x[TRUE]), c("a", "b", ""))
+      expect_identical(length(x[NULL]), 0L)
+      expect_identical(names(x[c(0, 2)]), "b")
+      expect_identical(names(x[factor("b")]), "b")
+
+      expect_error(x[[0]], class = "reactives_bad_index")
+      expect_error(x[[-1]], class = "reactives_bad_index")
+      expect_error(x[[TRUE]], class = "reactives_bad_index")
+      expect_error(x[[NA_integer_]], class = "reactives_bad_index")
+      expect_error(x[[""]], class = "reactives_bad_index")
+
+      expect_error(
+        x[c(TRUE, FALSE)] <- list(reactiveVal(1)),
+        class = "reactives_bad_index"
+      )
+      expect_error(
+        x[1:3] <- list(reactiveVal(1), reactiveVal(2)),
+        class = "reactives_bad_value"
+      )
+    }
+  )
+})

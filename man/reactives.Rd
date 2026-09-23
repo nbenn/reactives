@@ -51,6 +51,13 @@ written through the slot's reactive instead, as in \code{x$a(value)} for a
 \code{x[[length(x) + 1]] <- value}. Assigning with \verb{[<-} binds or removes several
 slots at once, taking \code{NULL}, a single reactive, or a list with one element
 per selected slot.
+
+Subscripts follow the rules of the vctrs package, which are stricter than
+base R's. Positions must be whole numbers within range, negative and
+positive positions can't be mixed, a logical subscript must be size 1 or
+match the number of slots, and unknown names, empty strings and missing
+values are errors. A list assigned with \verb{[<-} is only recycled from size 1.
+Reading a missing name with \code{[[} or \code{$} still returns \code{NULL}, as on a list.
 }
 \section{Sharing}{
 
