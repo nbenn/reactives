@@ -4,7 +4,9 @@
 #' [shiny::reactiveVal()] and [shiny::reactive()] objects. Slots can be added,
 #' removed, renamed and reordered, and each slot is tracked as its own reactive
 #' dependency. The `reactive_vals()` constructor creates a collection whose
-#' slots are [shiny::reactiveVal()] objects holding the given values.
+#' slots are [shiny::reactiveVal()] objects holding the given values, and which
+#' only accepts [shiny::reactiveVal()] slots, so code writing through its slots
+#' can rely on them being writable.
 #'
 #' Reading a slot, with `x$a`, `x[["a"]]` or `x[[1]]`, returns the slot's
 #' reactive, or `NULL` if there is no such slot, as `$` does on a list. Call
@@ -16,12 +18,20 @@
 #' slot, again as for a list. Assigning anything else is an error: a value is
 #' written through the slot's reactive instead, as in `x$a(value)` for a
 #' [shiny::reactiveVal()] slot. Slots can be unnamed; append one with
-#' `x[[length(x) + 1]] <- value`. Subsetting with `[` returns a new collection
-#' holding the same reactives.
+#' `x[[length(x) + 1]] <- value`. Assigning with `[<-` binds or removes several
+#' slots at once, taking `NULL`, a single reactive, or a list with one element
+#' per selected slot.
 #'
-#' The `reorder_reactives()` function changes the order of the slots in place.
-#' Readers of `names()`, `length()` and `as.list()` re-run, as do readers of
-#' slots by position; readers of slots by name do not.
+#' @section Sharing:
+#' A collection is shared, like [shiny::reactiveValues()]: after `y <- x`, both
+#' names refer to the same collection, and a change made through `$<-`,
+#' `[[<-`, `[<-`, `names<-` or `reorder()` is seen by everything holding it.
+#' That is what lets one part of an app change a collection while another
+#' reacts to it. Subsetting with `[` returns a new collection with its own set
+#' of slots, holding the same reactives, and `x[]` copies the whole collection.
+#' So `x <- x[order]` gives a reordered copy, which suffices when nothing else
+#' holds `x`, while `reorder(x, order)` reorders the shared collection itself.
+#' Renaming with `names<-` keeps every slot at its position, as for a list.
 #'
 #' @section Dependencies:
 #' Reading a slot makes the caller depend on that slot alone. The caller
@@ -29,12 +39,17 @@
 #' slots change. This also holds for a slot that does not exist yet, so a
 #' reader re-runs once the slot is added. Reading `names()` or `length()`
 #' depends on which slots exist and in what order, and `as.list()` depends on
-#' that and on every slot.
+#' that and on every slot. Reordering re-runs readers of `names()`, `length()`,
+#' `as.list()` and of slots by position, but not readers of slots by name.
 #'
-#' @param ... Reactives to hold, named or unnamed. For `reactives()`, `NULL`
-#'   entries are dropped. For `reactive_vals()`, any values, including `NULL`.
+#' @param ... For `reactives()` and `reactive_vals()`, the slots to hold, named
+#'   or unnamed: reactives, with `NULL` entries dropped, for `reactives()`, and
+#'   any values, including `NULL`, for `reactive_vals()`. Ignored by
+#'   `reorder()`.
 #'
-#' @return A `reactives` object; `reorder_reactives()` returns `x`, invisibly.
+#' @return A `reactives` object, or for `reactive_vals()` a `reactive_vals`
+#'   object, which is also a `reactives` object. The `reorder()` method returns
+#'   `x`, invisibly.
 #'
 #' @examples
 #' x <- reactives(a = shiny::reactiveVal(1), b = shiny::reactive(2 * 21))
@@ -53,41 +68,23 @@
 #' y <- reactive_vals(n = 1, label = "one")
 #' shiny::isolate(y$label())
 #'
-#' reorder_reactives(y, c("label", "n"))
-#' shiny::isolate(names(y))
+#' # Everything holding `y` sees the new order
+#' z <- y
+#' reorder(y, c("label", "n"))
+#' shiny::isolate(names(z))
 #'
 #' @export
 reactives <- function(...) {
-
-  slots <- list(...)
-  slots <- slots[!vapply(slots, is.null, logical(1L))]
-
-  nms <- names(slots)
-
-  if (is.null(nms)) {
-    nms <- character(length(slots))
-  }
-
-  named <- nzchar(nms)
-
-  if (anyDuplicated(nms[named])) {
-    abort("Each slot needs a distinct name.", "reactives_duplicate_name")
-  }
-
-  res <- new_reactives()
-
-  for (i in seq_along(slots)) {
-    key <- if (named[[i]]) nms[[i]] else next_positional_key(res)
-    bind_slot(res, key, slots[[i]])
-  }
-
-  res
+  build_reactives(list(...), "reactives")
 }
 
 #' @rdname reactives
 #' @export
 reactive_vals <- function(...) {
-  do.call(reactives, lapply(list(...), reactiveVal))
+  build_reactives(
+    lapply(list(...), reactiveVal),
+    c("reactive_vals", "reactives")
+  )
 }
 
 #' @param x A `reactives` object.
@@ -96,11 +93,7 @@ reactive_vals <- function(...) {
 #'
 #' @rdname reactives
 #' @export
-reorder_reactives <- function(x, order) {
-
-  if (!inherits(x, "reactives")) {
-    abort("Expected a `reactives` object.", "reactives_bad_object")
-  }
+reorder.reactives <- function(x, order, ...) {
 
   keys <- isolate(raw_keys(x))
   new_keys <- if (is.numeric(order)) keys[order] else order
@@ -123,13 +116,39 @@ reorder_reactives <- function(x, order) {
   invisible(x)
 }
 
+build_reactives <- function(slots, class) {
+
+  slots <- slots[!vapply(slots, is.null, logical(1L))]
+
+  nms <- names(slots)
+
+  if (is.null(nms)) {
+    nms <- character(length(slots))
+  }
+
+  named <- nzchar(nms)
+
+  if (anyDuplicated(nms[named])) {
+    abort("Each slot needs a distinct name.", "reactives_duplicate_name")
+  }
+
+  res <- new_reactives(class)
+
+  for (i in seq_along(slots)) {
+    key <- if (named[[i]]) nms[[i]] else next_positional_key(res)
+    bind_slot(res, key, slots[[i]])
+  }
+
+  res
+}
+
 # The collection keeps one `reactiveVal()` cell per key, holding the slot's
 # reactive or `NULL` when the key has no slot, plus an ordered `keys`
 # `reactiveVal()` that is the only record of which slots exist. Reading a key
 # subscribes to its cell alone, even when the key has no slot yet, so cells
 # are created on first use and are never deleted: a reader subscribed before a
 # removal must still re-run when the key comes back.
-new_reactives <- function() {
+new_reactives <- function(class) {
 
   state <- new.env(parent = emptyenv())
   state$positions <- 0L
@@ -140,7 +159,7 @@ new_reactives <- function() {
       keys = reactiveVal(character()),
       state = state
     ),
-    class = "reactives"
+    class = class
   )
 }
 
@@ -169,7 +188,7 @@ get_slot <- function(x, key) {
   slot_cell(x, key)()
 }
 
-bind_slot <- function(x, key, value) {
+check_slot <- function(x, value) {
 
   if (!is.reactive(value)) {
     abort(
@@ -181,6 +200,23 @@ bind_slot <- function(x, key, value) {
       "reactives_not_reactive"
     )
   }
+
+  if (inherits(x, "reactive_vals") && !inherits(value, "reactiveVal")) {
+    abort(
+      paste(
+        "A `reactive_vals` collection only holds `reactiveVal()` slots.",
+        "Use `reactives()` for a collection that also holds other reactives."
+      ),
+      "reactives_not_reactive_val"
+    )
+  }
+
+  invisible(value)
+}
+
+bind_slot <- function(x, key, value) {
+
+  check_slot(x, value)
 
   slot_cell(x, key)(value)
 
@@ -227,6 +263,7 @@ next_positional_key <- function(x) {
 
   state <- .subset2(x, "state")
   state$positions <- state$positions + 1L
+
   paste0(positional_marker(), state$positions)
 }
 
@@ -264,6 +301,78 @@ out_of_bounds <- function(i, n) {
   abort(
     sprintf("Position %d is beyond the %d slot(s).", i, n),
     "reactives_out_of_bounds"
+  )
+}
+
+select_positions <- function(keys, i) {
+
+  if (!is.numeric(i) && !is.logical(i)) {
+    abort(
+      "Slots are selected by names, positions or a logical vector.",
+      "reactives_bad_index"
+    )
+  }
+
+  pos <- seq_along(keys)[i]
+
+  if (anyNA(pos)) {
+    abort("Positions must lie within the slots.", "reactives_out_of_bounds")
+  }
+
+  keys[pos]
+}
+
+select_keys <- function(keys, i) {
+
+  if (!is.character(i)) {
+    return(select_positions(keys, i))
+  }
+
+  unknown <- setdiff(i, keys[!is_positional_key(keys)])
+
+  if (length(unknown)) {
+    abort(
+      paste0("Unknown slot names: ", paste(unknown, collapse = ", "), "."),
+      "reactives_unknown_name"
+    )
+  }
+
+  i
+}
+
+target_keys <- function(keys, i) {
+
+  if (!is.character(i)) {
+    return(select_positions(keys, i))
+  }
+
+  if (anyNA(i) || !all(nzchar(i))) {
+    abort("Slot names must be non-empty strings.", "reactives_bad_index")
+  }
+
+  i
+}
+
+target_values <- function(value, n) {
+
+  if (is.null(value)) {
+    return(rep(list(NULL), n))
+  }
+
+  if (is.reactive(value)) {
+    return(rep(list(value), n))
+  }
+
+  if (is.list(value) && length(value) %in% c(1L, n)) {
+    return(rep_len(value, n))
+  }
+
+  abort(
+    paste(
+      "Assign `NULL`, a single reactive, or a list with one element per",
+      "selected slot."
+    ),
+    "reactives_bad_value"
   )
 }
 
@@ -330,41 +439,32 @@ out_of_bounds <- function(i, n) {
 `[.reactives` <- function(x, i) {
 
   keys <- raw_keys(x)
-
-  if (is.character(i)) {
-
-    unknown <- setdiff(i, keys[!is_positional_key(keys)])
-
-    if (length(unknown)) {
-      abort(
-        paste0("Unknown slot names: ", paste(unknown, collapse = ", "), "."),
-        "reactives_unknown_name"
-      )
-    }
-
-    sel <- i
-
-  } else if (is.numeric(i) || is.logical(i)) {
-
-    pos <- seq_along(keys)[i]
-
-    if (anyNA(pos)) {
-      abort("Positions must lie within the slots.", "reactives_out_of_bounds")
-    }
-
-    sel <- keys[pos]
-
-  } else {
-    abort(
-      "Slots are selected by names, positions or a logical vector.",
-      "reactives_bad_index"
-    )
-  }
+  sel <- if (missing(i)) keys else select_keys(keys, i)
 
   slots <- lapply(sel, get_slot, x = x)
   names(slots) <- replace(sel, is_positional_key(sel), "")
 
-  do.call(reactives, slots)
+  build_reactives(slots, class(x))
+}
+
+#' @export
+`[<-.reactives` <- function(x, i, value) {
+
+  keys <- isolate(raw_keys(x))
+  targets <- if (missing(i)) keys else target_keys(keys, i)
+  values <- target_values(value, length(targets))
+
+  # Check every value before binding any, so that a bad element leaves the
+  # collection unchanged.
+  for (slot in values[!vapply(values, is.null, logical(1L))]) {
+    check_slot(x, slot)
+  }
+
+  for (j in seq_along(targets)) {
+    assign_slot(x, targets[[j]], values[[j]])
+  }
+
+  x
 }
 
 #' @export
@@ -455,7 +555,7 @@ format.reactives <- function(x, ...) {
     paste0("$", keys)
   )
 
-  header <- sprintf("<reactives[%d]>", length(keys))
+  header <- sprintf("<%s[%d]>", class(x)[[1L]], length(keys))
 
   if (!length(keys)) {
     return(header)

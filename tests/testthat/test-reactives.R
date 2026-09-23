@@ -100,7 +100,7 @@ test_that("a reader of one slot isn't re-run when another slot changes", {
       x$b <- reactiveVal(3)
       x$c <- reactiveVal(4)
       x$b <- NULL
-      reorder_reactives(x, c("c", "a"))
+      reorder(x, c("c", "a"))
       session$flushReact()
 
       expect_identical(runs, 1)
@@ -255,7 +255,7 @@ test_that("reordering re-runs readers of names() but not of single slots", {
 
       session$flushReact()
 
-      reorder_reactives(x, c("b", "a"))
+      reorder(x, c("b", "a"))
       session$flushReact()
 
       expect_identical(name_runs, 2)
@@ -400,7 +400,7 @@ test_that("renaming re-runs readers of the old and the new name", {
   )
 })
 
-test_that("reorder_reactives() takes positions, or names when all are named", {
+test_that("reorder() takes positions, or names when all are named", {
 
   with_session(
     {
@@ -408,17 +408,16 @@ test_that("reorder_reactives() takes positions, or names when all are named", {
       a <- reactiveVal("a")
       x <- reactives(u, a = a)
 
-      reorder_reactives(x, c(2, 1))
+      reorder(x, c(2, 1))
       expect_identical(names(x), c("a", ""))
       expect_identical(x[[2]], u)
 
       expect_error(
-        reorder_reactives(x, c("a", "")),
+        reorder(x, c("a", "")),
         class = "reactives_bad_order"
       )
-      expect_error(reorder_reactives(x, 1), class = "reactives_bad_order")
-      expect_error(reorder_reactives(x, c(1, 1)), class = "reactives_bad_order")
-      expect_error(reorder_reactives(list(), 1), class = "reactives_bad_object")
+      expect_error(reorder(x, 1), class = "reactives_bad_order")
+      expect_error(reorder(x, c(1, 1)), class = "reactives_bad_order")
     }
   )
 })
@@ -457,7 +456,137 @@ test_that("format() and print() work outside a reactive context", {
 
   x <- reactive_vals(a = 1, 2)
 
-  expect_identical(format(x), c("<reactives[2]>", "  $a", "  [[2]]"))
+  expect_identical(format(x), c("<reactive_vals[2]>", "  $a", "  [[2]]"))
   expect_identical(format(reactives()), "<reactives[0]>")
-  expect_output(print(x), "<reactives[2]>", fixed = TRUE)
+  expect_output(print(x), "<reactive_vals[2]>", fixed = TRUE)
+})
+
+test_that("a collection is shared by everything holding it", {
+
+  with_session(
+    {
+      x <- reactive_vals(a = 1)
+      y <- x
+
+      x$b <- reactiveVal(2)
+      names(x) <- c("p", "q")
+      z <- reorder(x, c("q", "p"))
+
+      expect_identical(names(y), c("q", "p"))
+      expect_identical(y$p, x$p)
+      expect_identical(z, x)
+    }
+  )
+})
+
+test_that("x[] copies the whole collection", {
+
+  with_session(
+    {
+      x <- reactive_vals(a = 1, 2)
+      y <- x[]
+
+      expect_identical(names(y), c("a", ""))
+      expect_identical(y$a, x$a)
+      expect_identical(y[[2]], x[[2]])
+
+      y$c <- reactiveVal(3)
+      expect_null(x$c)
+    }
+  )
+})
+
+test_that("[<- binds and removes several slots by name", {
+
+  with_session(
+    {
+      x <- reactives()
+      a <- reactiveVal(1)
+      b <- reactive(2)
+
+      x[c("a", "b")] <- list(a, b)
+
+      expect_identical(names(x), c("a", "b"))
+      expect_identical(x$b, b)
+
+      x[c("a", "zzz")] <- NULL
+      expect_identical(names(x), "b")
+
+      c1 <- reactiveVal(3)
+      x[c("b", "c")] <- c1
+
+      expect_identical(x$b, c1)
+      expect_identical(x$c, c1)
+
+      x[c("b", "c")] <- list(NULL, reactiveVal(4))
+      expect_identical(names(x), "c")
+    }
+  )
+})
+
+test_that("[<- works by position and on every slot", {
+
+  with_session(
+    {
+      u1 <- reactiveVal("u1")
+      u2 <- reactiveVal("u2")
+      x <- reactives(u1, a = reactiveVal("a"))
+
+      x[1] <- list(u2)
+      expect_identical(x[[1]], u2)
+
+      x[] <- list(u1, u2)
+
+      expect_identical(names(x), c("", "a"))
+      expect_identical(x[[1]], u1)
+      expect_identical(x$a, u2)
+
+      expect_error(x[3] <- list(u1), class = "reactives_out_of_bounds")
+
+      x[] <- NULL
+      expect_identical(length(x), 0L)
+    }
+  )
+})
+
+test_that("[<- checks every value before changing anything", {
+
+  with_session(
+    {
+      x <- reactive_vals(a = 1)
+
+      expect_error(
+        x[c("a", "b")] <- list(NULL, 1),
+        class = "reactives_not_reactive"
+      )
+      expect_identical(names(x), "a")
+
+      expect_error(
+        x[c("a", "b")] <- list(reactiveVal(1), reactiveVal(2), reactiveVal(3)),
+        class = "reactives_bad_value"
+      )
+      expect_identical(names(x), "a")
+    }
+  )
+})
+
+test_that("reactive_vals() only accepts reactiveVal slots", {
+
+  with_session(
+    {
+      x <- reactive_vals(a = 1)
+
+      expect_s3_class(x, "reactive_vals")
+      expect_s3_class(x, "reactives")
+      expect_s3_class(x["a"], "reactive_vals")
+
+      expect_error(x$b <- reactive(2), class = "reactives_not_reactive_val")
+
+      x$b <- reactiveVal(2)
+      expect_identical(x$b(), 2)
+
+      y <- reactives(a = reactiveVal(1), b = reactive(2))
+      expect_false(inherits(y, "reactive_vals"))
+    }
+  )
 })

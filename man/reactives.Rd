@@ -3,18 +3,20 @@
 \name{reactives}
 \alias{reactives}
 \alias{reactive_vals}
-\alias{reorder_reactives}
+\alias{reorder.reactives}
 \title{Keyed collections of reactives}
 \usage{
 reactives(...)
 
 reactive_vals(...)
 
-reorder_reactives(x, order)
+\method{reorder}{reactives}(x, order, ...)
 }
 \arguments{
-\item{...}{Reactives to hold, named or unnamed. For \code{reactives()}, \code{NULL}
-entries are dropped. For \code{reactive_vals()}, any values, including \code{NULL}.}
+\item{...}{For \code{reactives()} and \code{reactive_vals()}, the slots to hold, named
+or unnamed: reactives, with \code{NULL} entries dropped, for \code{reactives()}, and
+any values, including \code{NULL}, for \code{reactive_vals()}. Ignored by
+\code{reorder()}.}
 
 \item{x}{A \code{reactives} object.}
 
@@ -22,14 +24,18 @@ entries are dropped. For \code{reactive_vals()}, any values, including \code{NUL
 by name when all slots are named.}
 }
 \value{
-A \code{reactives} object; \code{reorder_reactives()} returns \code{x}, invisibly.
+A \code{reactives} object, or for \code{reactive_vals()} a \code{reactive_vals}
+object, which is also a \code{reactives} object. The \code{reorder()} method returns
+\code{x}, invisibly.
 }
 \description{
 A \code{reactives} object is a keyed collection of shiny reactives, such as
 \code{\link[shiny:reactiveVal]{shiny::reactiveVal()}} and \code{\link[shiny:reactive]{shiny::reactive()}} objects. Slots can be added,
 removed, renamed and reordered, and each slot is tracked as its own reactive
 dependency. The \code{reactive_vals()} constructor creates a collection whose
-slots are \code{\link[shiny:reactiveVal]{shiny::reactiveVal()}} objects holding the given values.
+slots are \code{\link[shiny:reactiveVal]{shiny::reactiveVal()}} objects holding the given values, and which
+only accepts \code{\link[shiny:reactiveVal]{shiny::reactiveVal()}} slots, so code writing through its slots
+can rely on them being writable.
 }
 \details{
 Reading a slot, with \code{x$a}, \code{x[["a"]]} or \code{x[[1]]}, returns the slot's
@@ -42,13 +48,23 @@ Assigning a reactive to a slot binds it, and assigning \code{NULL} removes the
 slot, again as for a list. Assigning anything else is an error: a value is
 written through the slot's reactive instead, as in \code{x$a(value)} for a
 \code{\link[shiny:reactiveVal]{shiny::reactiveVal()}} slot. Slots can be unnamed; append one with
-\code{x[[length(x) + 1]] <- value}. Subsetting with \code{[} returns a new collection
-holding the same reactives.
-
-The \code{reorder_reactives()} function changes the order of the slots in place.
-Readers of \code{names()}, \code{length()} and \code{as.list()} re-run, as do readers of
-slots by position; readers of slots by name do not.
+\code{x[[length(x) + 1]] <- value}. Assigning with \verb{[<-} binds or removes several
+slots at once, taking \code{NULL}, a single reactive, or a list with one element
+per selected slot.
 }
+\section{Sharing}{
+
+A collection is shared, like \code{\link[shiny:reactiveValues]{shiny::reactiveValues()}}: after \code{y <- x}, both
+names refer to the same collection, and a change made through \verb{$<-},
+\verb{[[<-}, \verb{[<-}, \verb{names<-} or \code{reorder()} is seen by everything holding it.
+That is what lets one part of an app change a collection while another
+reacts to it. Subsetting with \code{[} returns a new collection with its own set
+of slots, holding the same reactives, and \code{x[]} copies the whole collection.
+So \code{x <- x[order]} gives a reordered copy, which suffices when nothing else
+holds \code{x}, while \code{reorder(x, order)} reorders the shared collection itself.
+Renaming with \verb{names<-} keeps every slot at its position, as for a list.
+}
+
 \section{Dependencies}{
 
 Reading a slot makes the caller depend on that slot alone. The caller
@@ -56,7 +72,8 @@ re-runs when the slot is bound, replaced or removed, but not when other
 slots change. This also holds for a slot that does not exist yet, so a
 reader re-runs once the slot is added. Reading \code{names()} or \code{length()}
 depends on which slots exist and in what order, and \code{as.list()} depends on
-that and on every slot.
+that and on every slot. Reordering re-runs readers of \code{names()}, \code{length()},
+\code{as.list()} and of slots by position, but not readers of slots by name.
 }
 
 \examples{
@@ -76,7 +93,9 @@ shiny::isolate(names(x))
 y <- reactive_vals(n = 1, label = "one")
 shiny::isolate(y$label())
 
-reorder_reactives(y, c("label", "n"))
-shiny::isolate(names(y))
+# Everything holding `y` sees the new order
+z <- y
+reorder(y, c("label", "n"))
+shiny::isolate(names(z))
 
 }

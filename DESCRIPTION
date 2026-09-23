@@ -15,7 +15,8 @@ Language: en-US
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 8.0.0
 Imports:
-    shiny (>= 1.14.0)
+    shiny (>= 1.14.0),
+    stats
 Suggests:
     testthat (>= 3.0.0)
 Config/testthat/edition: 3
