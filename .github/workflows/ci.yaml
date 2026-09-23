@@ -1,0 +1,18 @@
+# The cross-platform check matrix in blockr.ci skips pull_request events
+# (unless the pull request is labelled `release`), and the blockr repos run it
+# from their merge queue instead. GitHub offers merge queues only on
+# organization-owned repositories, so this personal repository runs the matrix
+# on pushes to main.
+on:
+  pull_request:
+    branches: main
+  push:
+    branches: main
+
+name: ci
+
+jobs:
+  ci:
+    uses: BristolMyersSquibb/blockr.ci/.github/workflows/ci.yaml@main
+    secrets:
+      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}

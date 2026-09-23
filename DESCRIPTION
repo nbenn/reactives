@@ -1,0 +1,24 @@
+Package: reactives
+Title: Keyed Collections of 'shiny' Reactives
+Version: 0.0.0.9000
+Authors@R:
+    person("Nicolas", "Bennett", , "nicolas@cynkra.com",
+           role = c("aut", "cre", "cph"))
+Description: Keyed collections of 'shiny' reactives whose keys can be
+    added, removed and reordered, with dependencies tracked per key. The
+    'shiny' package offers reactiveValues() for keyed stored values, but
+    it can neither remove nor reorder keys, and it has no keyed
+    collection of computed values.
+License: GPL (>= 3)
+Encoding: UTF-8
+Language: en-US
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 8.0.0
+Imports:
+    shiny (>= 1.14.0)
+Suggests:
+    testthat (>= 3.0.0)
+Config/testthat/edition: 3
+URL: https://nbenn.github.io/reactives/,
+    https://github.com/nbenn/reactives
+BugReports: https://github.com/nbenn/reactives/issues
