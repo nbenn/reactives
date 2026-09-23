@@ -1,7 +1,21 @@
+---
+output: github_document
+---
+
+<!-- README.md is generated from README.Rmd. Please edit that file -->
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
 # reactives
 
 <!-- badges: start -->
 [![ci](https://github.com/nbenn/reactives/actions/workflows/ci.yaml/badge.svg)](https://github.com/nbenn/reactives/actions/workflows/ci.yaml)
+[![covr](https://codecov.io/gh/nbenn/reactives/graph/badge.svg?token=S882X4B4YH)](https://codecov.io/gh/nbenn/reactives)
 <!-- badges: end -->
 
 Keyed collections of shiny reactives whose keys can be added, removed and reordered, with dependencies tracked per key.
@@ -21,7 +35,7 @@ The package grows out of two workarounds in [blockr.core](https://github.com/Bri
 
 ## Status
 
-Under development. The design is worked out in the [issues](https://github.com/nbenn/reactives/issues), starting with what reading a slot returns ([#2](https://github.com/nbenn/reactives/issues/2)).
+Under development. Planned work is tracked in the [issues](https://github.com/nbenn/reactives/issues).
 
 ## Installation
 
