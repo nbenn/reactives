@@ -1,5 +1,5 @@
 #' @keywords internal
 "_PACKAGE"
 
-#' @importFrom shiny reactiveVal
+#' @importFrom shiny isolate is.reactive reactiveVal
 NULL

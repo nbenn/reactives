@@ -2,7 +2,6 @@
 % Please edit documentation in R/reactives-package.R
 \docType{package}
 \name{reactives-package}
-\alias{reactives}
 \alias{reactives-package}
 \title{reactives: Keyed Collections of 'shiny' Reactives}
 \description{
