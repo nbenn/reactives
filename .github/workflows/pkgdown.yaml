@@ -7,5 +7,9 @@ name: pkgdown
 jobs:
   pkgdown:
     uses: BristolMyersSquibb/blockr.ci/.github/workflows/pkgdown.yaml@main
+    with:
+      deploy: actions
     permissions:
-      contents: write
+      contents: read
+      pages: write
+      id-token: write
