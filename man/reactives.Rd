@@ -72,6 +72,15 @@ holds \code{x}, while \code{reorder(x, order)} reorders the shared collection it
 Renaming with \verb{names<-} keeps every slot at its position, as for a list.
 }
 
+\section{Lifetime}{
+
+A collection belongs to the session or module it was created in and is
+destroyed along with it, as a \code{\link[shiny:reactiveVal]{shiny::reactiveVal()}} is. Reading or changing
+it from another module doesn't tie it to that module, so destroying the
+module leaves the collection intact. A reactive bound to a slot, however,
+still belongs to the module it was created in.
+}
+
 \section{Dependencies}{
 
 Reading a slot makes the caller depend on that slot alone. The caller

@@ -496,6 +496,37 @@ test_that("x[] copies the whole collection", {
   )
 })
 
+test_that("a slot first read in a module survives the module", {
+
+  with_session(
+    {
+      x <- reactives()
+
+      moduleServer("child", function(input, output, session) x$a)
+      session$destroy("child")
+
+      a <- reactiveVal(1)
+      x$a <- a
+
+      expect_identical(x$a, a)
+    }
+  )
+})
+
+test_that("a collection is destroyed along with its module", {
+
+  with_session(
+    {
+      x <- moduleServer("child", function(input, output, session) reactives())
+      x$a <- reactiveVal(1)
+      session$destroy("child")
+
+      expect_error(x$a, class = "shiny.destroyed.error")
+      expect_error(names(x), class = "shiny.destroyed.error")
+    }
+  )
+})
+
 test_that("[<- binds and removes several slots by name", {
 
   with_session(

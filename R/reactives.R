@@ -40,6 +40,13 @@
 #' holds `x`, while `reorder(x, order)` reorders the shared collection itself.
 #' Renaming with `names<-` keeps every slot at its position, as for a list.
 #'
+#' @section Lifetime:
+#' A collection belongs to the session or module it was created in and is
+#' destroyed along with it, as a [shiny::reactiveVal()] is. Reading or changing
+#' it from another module doesn't tie it to that module, so destroying the
+#' module leaves the collection intact. A reactive bound to a slot, however,
+#' still belongs to the module it was created in.
+#'
 #' @section Dependencies:
 #' Reading a slot makes the caller depend on that slot alone. The caller
 #' re-runs when the slot is bound, replaced or removed, but not when other
@@ -154,7 +161,9 @@ build_reactives <- function(slots, class) {
 # `reactiveVal()` that is the only record of which slots exist. Reading a key
 # subscribes to its cell alone, even when the key has no slot yet, so cells
 # are created on first use and are never deleted: a reader subscribed before a
-# removal must still re-run when the key comes back.
+# removal must still re-run when the key comes back. Since shiny destroys a
+# reactive along with the module it was created in, cells are created in the
+# collection's own reactive domain, whichever module first uses them.
 new_reactives <- function(class) {
 
   state <- new.env(parent = emptyenv())
@@ -164,6 +173,7 @@ new_reactives <- function(class) {
     list(
       cells = new.env(parent = emptyenv()),
       keys = reactiveVal(character()),
+      domain = getDefaultReactiveDomain(),
       state = state
     ),
     class = class
@@ -184,7 +194,7 @@ slot_cell <- function(x, key) {
   cell <- cells[[key]]
 
   if (is.null(cell)) {
-    cell <- reactiveVal(NULL)
+    cell <- withReactiveDomain(.subset2(x, "domain"), reactiveVal(NULL))
     assign(key, cell, envir = cells)
   }
 
