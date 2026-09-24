@@ -90,6 +90,11 @@ reader re-runs once the slot is added. Reading \code{names()} or \code{length()}
 depends on which slots exist and in what order, and \code{as.list()} depends on
 that and on every slot. Reordering re-runs readers of \code{names()}, \code{length()},
 \code{as.list()} and of slots by position, but not readers of slots by name.
+
+Printing, \code{format()} and \code{str()} make the caller depend on nothing, and they
+never call a slot, so they run no computed slot. Outside a reactive
+consumer, as at the console, \code{names()} and \code{length()} work as they would
+inside \code{\link[shiny:isolate]{shiny::isolate()}} rather than fail.
 }
 
 \examples{

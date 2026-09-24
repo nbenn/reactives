@@ -4,4 +4,5 @@
 #' @importFrom shiny isolate is.reactive reactiveVal
 #' @importFrom shiny getDefaultReactiveDomain withReactiveDomain
 #' @importFrom stats reorder
+#' @importFrom utils str
 NULL
