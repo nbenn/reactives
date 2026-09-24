@@ -452,13 +452,69 @@ test_that("[ returns a new collection holding the same reactives", {
   )
 })
 
-test_that("format() and print() work outside a reactive context", {
+test_that("printing and inspecting work outside a reactive context", {
 
   x <- reactive_vals(a = 1, 2)
 
   expect_identical(format(x), c("<reactive_vals[2]>", "  $a", "  [[2]]"))
   expect_identical(format(reactives()), "<reactives[0]>")
   expect_output(print(x), "<reactive_vals[2]>", fixed = TRUE)
+  expect_output(str(x), "<reactive_vals[2]>", fixed = TRUE)
+
+  expect_identical(names(x), c("a", ""))
+  expect_identical(length(x), 2L)
+
+  x$b <- reactiveVal(3)
+  expect_identical(names(x), c("a", "", "b"))
+})
+
+test_that("str() shows the kind of each slot, laid out as for a list", {
+
+  x <- reactives(a = reactiveVal(1), bb = shiny::reactive(2), reactiveVal(3))
+
+  expect_identical(
+    capture.output(str(x)),
+    c(
+      "<reactives[3]>",
+      " $ a : reactiveVal",
+      " $ bb: reactiveExpr",
+      " $   : reactiveVal"
+    )
+  )
+
+  expect_identical(
+    capture.output(str(list(y = reactive_vals(a = 1)))),
+    c("List of 1", " $ y:<reactive_vals[1]>", "  ..$ a: reactiveVal")
+  )
+
+  expect_identical(capture.output(str(reactives())), "<reactives[0]>")
+})
+
+test_that("printing and inspecting don't subscribe or run a computed slot", {
+
+  with_session(
+    {
+      ran <- FALSE
+      x <- reactives(a = reactiveVal(1), b = reactive(ran <<- TRUE))
+
+      runs <- 0
+      observe(
+        {
+          runs <<- runs + 1
+          capture.output(print(x), format(x), str(x))
+        }
+      )
+      session$flushReact()
+
+      x$a <- reactiveVal(2)
+      x$c <- reactiveVal(3)
+      reorder(x, c("c", "b", "a"))
+      session$flushReact()
+
+      expect_identical(runs, 1)
+      expect_false(ran)
+    }
+  )
 })
 
 test_that("a collection is shared by everything holding it", {

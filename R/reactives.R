@@ -49,6 +49,11 @@
 #' that and on every slot. Reordering re-runs readers of `names()`, `length()`,
 #' `as.list()` and of slots by position, but not readers of slots by name.
 #'
+#' Printing, `format()` and `str()` make the caller depend on nothing, and they
+#' never call a slot, so they run no computed slot. Outside a reactive
+#' consumer, as at the console, `names()` and `length()` work as they would
+#' inside [shiny::isolate()] rather than fail.
+#'
 #' @param ... For `reactives()` and `reactive_vals()`, the slots to hold, named
 #'   or unnamed: reactives, with `NULL` entries dropped, for `reactives()`, and
 #'   any values, including `NULL`, for `reactive_vals()`. Ignored by
@@ -176,6 +181,13 @@ raw_keys <- function(x) {
 
 set_keys <- function(x, keys) {
   .subset2(x, "keys")(keys)
+}
+
+# Reading `keys` fails outside a reactive consumer, and shiny exports no way to
+# check for one first. Retrying inside `isolate()` lets `names()` and `length()`
+# work at the console, while any other error recurs on the retry.
+current_keys <- function(x) {
+  tryCatch(raw_keys(x), error = function(e) isolate(raw_keys(x)))
 }
 
 slot_cell <- function(x, key) {
@@ -378,7 +390,7 @@ display_names <- function(keys) {
 
 #' @export
 names.reactives <- function(x) {
-  display_names(raw_keys(x))
+  display_names(current_keys(x))
 }
 
 #' @export
@@ -439,7 +451,7 @@ names.reactives <- function(x) {
 
 #' @export
 length.reactives <- function(x) {
-  length(raw_keys(x))
+  length(current_keys(x))
 }
 
 #' @export
@@ -464,7 +476,7 @@ format.reactives <- function(x, ...) {
     paste0("$", keys)
   )
 
-  header <- sprintf("<%s[%d]>", class(x)[[1L]], length(keys))
+  header <- format_header(x, length(keys))
 
   if (!length(keys)) {
     return(header)
@@ -477,6 +489,35 @@ format.reactives <- function(x, ...) {
 print.reactives <- function(x, ...) {
   cat(format(x, ...), sep = "\n")
   invisible(x)
+}
+
+#' @export
+# nolint next: object_name_linter.
+str.reactives <- function(object, ..., indent.str = " ") {
+
+  keys <- isolate(raw_keys(object))
+  slots <- isolate(lapply(keys, get_slot, x = object))
+
+  cat(format_header(object, length(keys)), "\n", sep = "")
+
+  if (length(keys)) {
+    cat(
+      paste0(
+        indent.str,
+        "$ ",
+        format(replace(keys, is_positional_key(keys), "")),
+        ": ",
+        vapply(lapply(slots, class), `[[`, character(1L), 1L)
+      ),
+      sep = "\n"
+    )
+  }
+
+  invisible()
+}
+
+format_header <- function(x, n) {
+  sprintf("<%s[%d]>", class(x)[[1L]], n)
 }
 
 abort <- function(message, class) {
