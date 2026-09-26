@@ -6,13 +6,16 @@
 #' dependency. The `reactive_vals()` constructor creates a collection whose
 #' slots are [shiny::reactiveVal()] objects holding the given values, and which
 #' only accepts [shiny::reactiveVal()] slots, so code writing through its slots
-#' can rely on them being writable.
+#' can rely on them being writable. To test whether an object is a collection
+#' of either kind, use `is_reactives()`.
 #'
 #' Reading a slot, with `x$a`, `x[["a"]]` or `x[[1]]`, returns the slot's
 #' reactive, or `NULL` if there is no such slot, as `$` does on a list. Call
-#' the result to get its value, as in `x$a()`. Because a slot holds a reactive
-#' rather than a value, a slot whose [shiny::reactiveVal()] stores `NULL` is
-#' distinct from a missing slot.
+#' the result to get its value, as in `x$a()`, or get the value of every slot
+#' at once with `slot_values()`, as [shiny::reactiveValuesToList()] does for a
+#' [shiny::reactiveValues()] object. Because a slot holds a reactive rather
+#' than a value, a slot whose [shiny::reactiveVal()] stores `NULL` is distinct
+#' from a missing slot.
 #'
 #' Assigning a reactive to a slot binds it, and assigning `NULL` removes the
 #' slot, again as for a list. Assigning anything else is an error: a value is
@@ -47,19 +50,39 @@
 #' module leaves the collection intact. A reactive bound to a slot, however,
 #' still belongs to the module it was created in.
 #'
+#' To keep reading a collection after its [shiny::testServer()] session has
+#' closed, a test can take a snapshot with `snapshot_reactives()` while the
+#' session is still open. A snapshot belongs to no session. For each
+#' [shiny::reactiveVal()] slot it holds a new [shiny::reactiveVal()] with the
+#' slot's current value, and for each other slot a [shiny::reactive()]
+#' returning its current value, so writing through a slot of the snapshot or
+#' of the original leaves the other unchanged. A slot that fails when computed
+#' fails the same way when its copy is called, rather than failing the
+#' snapshot. Names, order and class carry over.
+#'
 #' @section Dependencies:
 #' Reading a slot makes the caller depend on that slot alone. The caller
 #' re-runs when the slot is bound, replaced or removed, but not when other
 #' slots change. This also holds for a slot that does not exist yet, so a
 #' reader re-runs once the slot is added. Reading `names()` or `length()`
-#' depends on which slots exist and in what order, and `as.list()` depends on
-#' that and on every slot. Reordering re-runs readers of `names()`, `length()`,
-#' `as.list()` and of slots by position, but not readers of slots by name.
+#' depends on which slots exist and in what order, `as.list()` depends on that
+#' and on every slot, and `slot_values()` also on every slot's value.
+#' Reordering re-runs readers of `names()`, `length()`, `as.list()`,
+#' `slot_values()` and of slots by position, but not readers of slots by name.
 #'
 #' Printing, `format()` and `str()` make the caller depend on nothing, and they
-#' never call a slot, so they run no computed slot. Outside a reactive
-#' consumer, as at the console, `names()` and `length()` work as they would
-#' inside [shiny::isolate()] rather than fail.
+#' never call a slot, so they run no computed slot. Taking a snapshot also
+#' makes the caller depend on nothing, though it runs every computed slot.
+#' Outside a reactive consumer, as at the console, `names()` and `length()`
+#' work as they would inside [shiny::isolate()] rather than fail.
+#'
+#' @section Reactlog:
+#' In [reactlog](https://rstudio.github.io/reactlog/), the dependency on slot
+#' `a` shows as `reactives$a`, or as `reactive_vals$a` in a `reactive_vals`
+#' collection, and the one on which slots exist and in what order as
+#' `names(reactives)`. Unnamed slots show as `reactives$...1`, `reactives$...2`
+#' and so on, numbered in the order they were added rather than by position,
+#' so a label survives reordering.
 #'
 #' @param ... For `reactives()` and `reactive_vals()`, the slots to hold, named
 #'   or unnamed: reactives, with `NULL` entries dropped, for `reactives()`, and
@@ -67,8 +90,10 @@
 #'   `reorder()`.
 #'
 #' @return A `reactives` object, or for `reactive_vals()` a `reactive_vals`
-#'   object, which is also a `reactives` object. The `reorder()` method returns
-#'   `x`, invisibly.
+#'   object, which is also a `reactives` object. A snapshot has the class of
+#'   `x`. The `reorder()` method returns `x`, invisibly, `slot_values()`
+#'   returns a list of the slots' values, in slot order and named as by
+#'   `as.list()`, and `is_reactives()` returns `TRUE` or `FALSE`.
 #'
 #' @examples
 #' x <- reactives(a = shiny::reactiveVal(1), b = shiny::reactive(2 * 21))
@@ -92,6 +117,22 @@
 #' reorder(y, c("label", "n"))
 #' shiny::isolate(names(z))
 #'
+#' shiny::isolate(slot_values(y))
+#' is_reactives(y)
+#'
+#' # A snapshot outlives the session it was taken in
+#' snap <- NULL
+#' shiny::testServer(
+#'   function(input, output, session) {
+#'     x <- reactives(n = shiny::reactive(input$n))
+#'   },
+#'   {
+#'     session$setInputs(n = 21)
+#'     snap <<- snapshot_reactives(x)
+#'   }
+#' )
+#' shiny::isolate(snap$n())
+#'
 #' @export
 reactives <- function(...) {
   build_reactives(list(...), "reactives")
@@ -106,7 +147,7 @@ reactive_vals <- function(...) {
   )
 }
 
-#' @param x A `reactives` object.
+#' @param x A `reactives` object, or for `is_reactives()`, any object.
 #' @param order The new order, listing every slot exactly once: by position, or
 #'   by name when all slots are named.
 #'
@@ -133,6 +174,19 @@ reorder.reactives <- function(x, order, ...) {
   set_keys(x, new_keys)
 
   invisible(x)
+}
+
+#' @rdname reactives
+#' @export
+is_reactives <- function(x) {
+  inherits(x, "reactives")
+}
+
+#' @rdname reactives
+#' @export
+slot_values <- function(x) {
+  check_collection(x)
+  lapply(as.list(x), do.call, list())
 }
 
 build_reactives <- function(slots, class) {
@@ -177,7 +231,10 @@ new_reactives <- function(class) {
   structure(
     list(
       cells = new.env(parent = emptyenv()),
-      keys = reactiveVal(character()),
+      keys = reactiveVal(
+        character(),
+        label = paste0("names(", class[[1L]], ")")
+      ),
       domain = getDefaultReactiveDomain(),
       state = state
     ),
@@ -206,11 +263,23 @@ slot_cell <- function(x, key) {
   cell <- cells[[key]]
 
   if (is.null(cell)) {
-    cell <- withReactiveDomain(.subset2(x, "domain"), reactiveVal(NULL))
+    cell <- withReactiveDomain(
+      .subset2(x, "domain"),
+      reactiveVal(NULL, label = cell_label(x, key))
+    )
     assign(key, cell, envir = cells)
   }
 
   cell
+}
+
+cell_label <- function(x, key) {
+
+  if (is_positional_key(key)) {
+    key <- sub(positional_marker(), "...", key, fixed = TRUE)
+  }
+
+  paste0(class(x)[[1L]], "$", key)
 }
 
 get_slot <- function(x, key) {
@@ -241,6 +310,15 @@ check_slot <- function(x, value) {
   }
 
   invisible(value)
+}
+
+check_collection <- function(x) {
+
+  if (!is_reactives(x)) {
+    abort("Expected a `reactives` object.", "reactives_not_collection")
+  }
+
+  invisible(x)
 }
 
 bind_slot <- function(x, key, value) {
