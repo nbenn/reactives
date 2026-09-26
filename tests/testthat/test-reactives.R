@@ -293,6 +293,63 @@ test_that("as.list() returns the slots and re-runs on any change", {
   )
 })
 
+test_that("slot_values() returns the value of every slot, in slot order", {
+
+  with_session(
+    {
+      x <- reactives(a = reactiveVal(1), reactive("u"), b = reactiveVal(NULL))
+
+      expect_identical(slot_values(x), list(a = 1, "u", b = NULL))
+
+      reorder(x, c(3, 1, 2))
+      expect_identical(slot_values(x), list(b = NULL, a = 1, "u"))
+
+      expect_identical(slot_values(reactive_vals(1, 2)), list(1, 2))
+      expect_identical(slot_values(reactives()), list())
+    }
+  )
+})
+
+test_that("slot_values() re-runs when a slot or its value changes", {
+
+  with_session(
+    {
+      x <- reactive_vals(a = 1, b = 2)
+
+      seen <- NULL
+      observe(seen <<- slot_values(x))
+      session$flushReact()
+
+      x$a(10)
+      session$flushReact()
+      expect_identical(seen, list(a = 10, b = 2))
+
+      x$c <- reactiveVal(3)
+      session$flushReact()
+      expect_identical(seen, list(a = 10, b = 2, c = 3))
+
+      x$b <- NULL
+      reorder(x, c("c", "a"))
+      session$flushReact()
+      expect_identical(seen, list(c = 3, a = 10))
+    }
+  )
+})
+
+test_that("slot_values() passes on the error of a computed slot", {
+
+  with_session(
+    {
+      x <- reactives(a = reactiveVal(1), b = reactive(stop("boom")))
+      expect_error(slot_values(x), "boom")
+    }
+  )
+})
+
+test_that("slot_values() needs a collection", {
+  expect_error(slot_values(list()), class = "reactives_not_collection")
+})
+
 test_that("unnamed slots are read and removed by position", {
 
   with_session(

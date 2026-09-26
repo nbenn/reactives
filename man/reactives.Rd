@@ -5,6 +5,7 @@
 \alias{reactive_vals}
 \alias{reorder.reactives}
 \alias{is_reactives}
+\alias{slot_values}
 \title{Keyed collections of reactives}
 \usage{
 reactives(...)
@@ -14,6 +15,8 @@ reactive_vals(...)
 \method{reorder}{reactives}(x, order, ...)
 
 is_reactives(x)
+
+slot_values(x)
 }
 \arguments{
 \item{...}{For \code{reactives()} and \code{reactive_vals()}, the slots to hold, named
@@ -29,7 +32,9 @@ by name when all slots are named.}
 \value{
 A \code{reactives} object, or for \code{reactive_vals()} a \code{reactive_vals}
 object, which is also a \code{reactives} object. The \code{reorder()} method returns
-\code{x}, invisibly, and \code{is_reactives()} returns \code{TRUE} or \code{FALSE}.
+\code{x}, invisibly, \code{slot_values()} returns a list of the slots' values, in
+slot order and named as by \code{as.list()}, and \code{is_reactives()} returns
+\code{TRUE} or \code{FALSE}.
 }
 \description{
 A \code{reactives} object is a keyed collection of shiny reactives, such as
@@ -44,9 +49,11 @@ of either kind, use \code{is_reactives()}.
 \details{
 Reading a slot, with \code{x$a}, \code{x[["a"]]} or \code{x[[1]]}, returns the slot's
 reactive, or \code{NULL} if there is no such slot, as \code{$} does on a list. Call
-the result to get its value, as in \code{x$a()}. Because a slot holds a reactive
-rather than a value, a slot whose \code{\link[shiny:reactiveVal]{shiny::reactiveVal()}} stores \code{NULL} is
-distinct from a missing slot.
+the result to get its value, as in \code{x$a()}, or get the value of every slot
+at once with \code{slot_values()}, as \code{\link[shiny:reactiveValuesToList]{shiny::reactiveValuesToList()}} does for a
+\code{\link[shiny:reactiveValues]{shiny::reactiveValues()}} object. Because a slot holds a reactive rather
+than a value, a slot whose \code{\link[shiny:reactiveVal]{shiny::reactiveVal()}} stores \code{NULL} is distinct
+from a missing slot.
 
 Assigning a reactive to a slot binds it, and assigning \code{NULL} removes the
 slot, again as for a list. Assigning anything else is an error: a value is
@@ -91,9 +98,10 @@ Reading a slot makes the caller depend on that slot alone. The caller
 re-runs when the slot is bound, replaced or removed, but not when other
 slots change. This also holds for a slot that does not exist yet, so a
 reader re-runs once the slot is added. Reading \code{names()} or \code{length()}
-depends on which slots exist and in what order, and \code{as.list()} depends on
-that and on every slot. Reordering re-runs readers of \code{names()}, \code{length()},
-\code{as.list()} and of slots by position, but not readers of slots by name.
+depends on which slots exist and in what order, \code{as.list()} depends on that
+and on every slot, and \code{slot_values()} also on every slot's value.
+Reordering re-runs readers of \code{names()}, \code{length()}, \code{as.list()},
+\code{slot_values()} and of slots by position, but not readers of slots by name.
 
 Printing, \code{format()} and \code{str()} make the caller depend on nothing, and they
 never call a slot, so they run no computed slot. Outside a reactive
@@ -137,6 +145,7 @@ z <- y
 reorder(y, c("label", "n"))
 shiny::isolate(names(z))
 
+shiny::isolate(slot_values(y))
 is_reactives(y)
 
 }

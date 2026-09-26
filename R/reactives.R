@@ -11,9 +11,11 @@
 #'
 #' Reading a slot, with `x$a`, `x[["a"]]` or `x[[1]]`, returns the slot's
 #' reactive, or `NULL` if there is no such slot, as `$` does on a list. Call
-#' the result to get its value, as in `x$a()`. Because a slot holds a reactive
-#' rather than a value, a slot whose [shiny::reactiveVal()] stores `NULL` is
-#' distinct from a missing slot.
+#' the result to get its value, as in `x$a()`, or get the value of every slot
+#' at once with `slot_values()`, as [shiny::reactiveValuesToList()] does for a
+#' [shiny::reactiveValues()] object. Because a slot holds a reactive rather
+#' than a value, a slot whose [shiny::reactiveVal()] stores `NULL` is distinct
+#' from a missing slot.
 #'
 #' Assigning a reactive to a slot binds it, and assigning `NULL` removes the
 #' slot, again as for a list. Assigning anything else is an error: a value is
@@ -53,9 +55,10 @@
 #' re-runs when the slot is bound, replaced or removed, but not when other
 #' slots change. This also holds for a slot that does not exist yet, so a
 #' reader re-runs once the slot is added. Reading `names()` or `length()`
-#' depends on which slots exist and in what order, and `as.list()` depends on
-#' that and on every slot. Reordering re-runs readers of `names()`, `length()`,
-#' `as.list()` and of slots by position, but not readers of slots by name.
+#' depends on which slots exist and in what order, `as.list()` depends on that
+#' and on every slot, and `slot_values()` also on every slot's value.
+#' Reordering re-runs readers of `names()`, `length()`, `as.list()`,
+#' `slot_values()` and of slots by position, but not readers of slots by name.
 #'
 #' Printing, `format()` and `str()` make the caller depend on nothing, and they
 #' never call a slot, so they run no computed slot. Outside a reactive
@@ -81,7 +84,9 @@
 #'
 #' @return A `reactives` object, or for `reactive_vals()` a `reactive_vals`
 #'   object, which is also a `reactives` object. The `reorder()` method returns
-#'   `x`, invisibly, and `is_reactives()` returns `TRUE` or `FALSE`.
+#'   `x`, invisibly, `slot_values()` returns a list of the slots' values, in
+#'   slot order and named as by `as.list()`, and `is_reactives()` returns
+#'   `TRUE` or `FALSE`.
 #'
 #' @examples
 #' x <- reactives(a = shiny::reactiveVal(1), b = shiny::reactive(2 * 21))
@@ -105,6 +110,7 @@
 #' reorder(y, c("label", "n"))
 #' shiny::isolate(names(z))
 #'
+#' shiny::isolate(slot_values(y))
 #' is_reactives(y)
 #'
 #' @export
@@ -159,6 +165,13 @@ reorder.reactives <- function(x, order, ...) {
 #' @export
 is_reactives <- function(x) {
   inherits(x, "reactives")
+}
+
+#' @rdname reactives
+#' @export
+slot_values <- function(x) {
+  check_collection(x)
+  lapply(as.list(x), do.call, list())
 }
 
 build_reactives <- function(slots, class, label) {
@@ -271,6 +284,15 @@ check_slot <- function(x, value) {
   }
 
   invisible(value)
+}
+
+check_collection <- function(x) {
+
+  if (!is_reactives(x)) {
+    abort("Expected a `reactives` object.", "reactives_not_collection")
+  }
+
+  invisible(x)
 }
 
 bind_slot <- function(x, key, value) {
