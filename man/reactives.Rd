@@ -4,6 +4,7 @@
 \alias{reactives}
 \alias{reactive_vals}
 \alias{reorder.reactives}
+\alias{is_reactives}
 \title{Keyed collections of reactives}
 \usage{
 reactives(...)
@@ -11,6 +12,8 @@ reactives(...)
 reactive_vals(...)
 
 \method{reorder}{reactives}(x, order, ...)
+
+is_reactives(x)
 }
 \arguments{
 \item{...}{For \code{reactives()} and \code{reactive_vals()}, the slots to hold, named
@@ -18,7 +21,7 @@ or unnamed: reactives, with \code{NULL} entries dropped, for \code{reactives()},
 any values, including \code{NULL}, for \code{reactive_vals()}. Ignored by
 \code{reorder()}.}
 
-\item{x}{A \code{reactives} object.}
+\item{x}{A \code{reactives} object, or for \code{is_reactives()}, any object.}
 
 \item{order}{The new order, listing every slot exactly once: by position, or
 by name when all slots are named.}
@@ -26,7 +29,7 @@ by name when all slots are named.}
 \value{
 A \code{reactives} object, or for \code{reactive_vals()} a \code{reactive_vals}
 object, which is also a \code{reactives} object. The \code{reorder()} method returns
-\code{x}, invisibly.
+\code{x}, invisibly, and \code{is_reactives()} returns \code{TRUE} or \code{FALSE}.
 }
 \description{
 A \code{reactives} object is a keyed collection of shiny reactives, such as
@@ -35,7 +38,8 @@ removed, renamed and reordered, and each slot is tracked as its own reactive
 dependency. The \code{reactive_vals()} constructor creates a collection whose
 slots are \code{\link[shiny:reactiveVal]{shiny::reactiveVal()}} objects holding the given values, and which
 only accepts \code{\link[shiny:reactiveVal]{shiny::reactiveVal()}} slots, so code writing through its slots
-can rely on them being writable.
+can rely on them being writable. To test whether an object is a collection
+of either kind, use \code{is_reactives()}.
 }
 \details{
 Reading a slot, with \code{x$a}, \code{x[["a"]]} or \code{x[[1]]}, returns the slot's
@@ -132,5 +136,7 @@ shiny::isolate(y$label())
 z <- y
 reorder(y, c("label", "n"))
 shiny::isolate(names(z))
+
+is_reactives(y)
 
 }

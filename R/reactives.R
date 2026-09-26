@@ -6,7 +6,8 @@
 #' dependency. The `reactive_vals()` constructor creates a collection whose
 #' slots are [shiny::reactiveVal()] objects holding the given values, and which
 #' only accepts [shiny::reactiveVal()] slots, so code writing through its slots
-#' can rely on them being writable.
+#' can rely on them being writable. To test whether an object is a collection
+#' of either kind, use `is_reactives()`.
 #'
 #' Reading a slot, with `x$a`, `x[["a"]]` or `x[[1]]`, returns the slot's
 #' reactive, or `NULL` if there is no such slot, as `$` does on a list. Call
@@ -80,7 +81,7 @@
 #'
 #' @return A `reactives` object, or for `reactive_vals()` a `reactive_vals`
 #'   object, which is also a `reactives` object. The `reorder()` method returns
-#'   `x`, invisibly.
+#'   `x`, invisibly, and `is_reactives()` returns `TRUE` or `FALSE`.
 #'
 #' @examples
 #' x <- reactives(a = shiny::reactiveVal(1), b = shiny::reactive(2 * 21))
@@ -104,6 +105,8 @@
 #' reorder(y, c("label", "n"))
 #' shiny::isolate(names(z))
 #'
+#' is_reactives(y)
+#'
 #' @export
 reactives <- function(...) {
   build_reactives(
@@ -123,7 +126,7 @@ reactive_vals <- function(...) {
   )
 }
 
-#' @param x A `reactives` object.
+#' @param x A `reactives` object, or for `is_reactives()`, any object.
 #' @param order The new order, listing every slot exactly once: by position, or
 #'   by name when all slots are named.
 #'
@@ -150,6 +153,12 @@ reorder.reactives <- function(x, order, ...) {
   set_keys(x, new_keys)
 
   invisible(x)
+}
+
+#' @rdname reactives
+#' @export
+is_reactives <- function(x) {
+  inherits(x, "reactives")
 }
 
 build_reactives <- function(slots, class, label) {

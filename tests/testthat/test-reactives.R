@@ -678,6 +678,16 @@ test_that("reactive_vals() only accepts reactiveVal slots", {
   )
 })
 
+test_that("is_reactives() is TRUE for either kind of collection only", {
+
+  expect_true(is_reactives(reactives()))
+  expect_true(is_reactives(reactive_vals(a = 1)))
+
+  expect_false(is_reactives(list()))
+  expect_false(is_reactives(shiny::reactiveValues()))
+  expect_false(is_reactives(reactiveVal(1)))
+})
+
 test_that("subscripts follow vctrs' rules rather than base R's", {
 
   with_session(
