@@ -97,6 +97,20 @@ consumer, as at the console, \code{names()} and \code{length()} work as they wou
 inside \code{\link[shiny:isolate]{shiny::isolate()}} rather than fail.
 }
 
+\section{Reactlog}{
+
+In \href{https://rstudio.github.io/reactlog/}{reactlog}, a collection is named
+after the variable it was assigned to when created, as a
+\code{\link[shiny:reactiveValues]{shiny::reactiveValues()}} object is. After \code{x <- reactives(a = ...)}, the
+dependency on slot \code{a} shows as \code{x$a}, the one on which slots exist and in
+what order as \code{names(x)}, and those on unnamed slots as \code{x$...1}, \code{x$...2}
+and so on. Unnamed slots are numbered in the order they were added rather
+than by position, so a label survives reordering. The name is read from
+source references, and a collection created without them, as in an
+installed package, is named after its class and a number instead, as in
+\code{reactives1}.
+}
+
 \examples{
 x <- reactives(a = shiny::reactiveVal(1), b = shiny::reactive(2 * 21))
 shiny::isolate(x$a())
