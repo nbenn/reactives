@@ -77,16 +77,12 @@
 #' work as they would inside [shiny::isolate()] rather than fail.
 #'
 #' @section Reactlog:
-#' In [reactlog](https://rstudio.github.io/reactlog/), a collection is named
-#' after the variable it was assigned to when created, as a
-#' [shiny::reactiveValues()] object is. After `x <- reactives(a = ...)`, the
-#' dependency on slot `a` shows as `x$a`, the one on which slots exist and in
-#' what order as `names(x)`, and those on unnamed slots as `x$...1`, `x$...2`
-#' and so on. Unnamed slots are numbered in the order they were added rather
-#' than by position, so a label survives reordering. The name is read from
-#' source references, and a collection created without them, as in an
-#' installed package, is named after its class and a number instead, as in
-#' `reactives1`.
+#' In [reactlog](https://rstudio.github.io/reactlog/), the dependency on slot
+#' `a` shows as `reactives$a`, or as `reactive_vals$a` in a `reactive_vals`
+#' collection, and the one on which slots exist and in what order as
+#' `names(reactives)`. Unnamed slots show as `reactives$...1`, `reactives$...2`
+#' and so on, numbered in the order they were added rather than by position,
+#' so a label survives reordering.
 #'
 #' @param ... For `reactives()` and `reactive_vals()`, the slots to hold, named
 #'   or unnamed: reactives, with `NULL` entries dropped, for `reactives()`, and
@@ -139,11 +135,7 @@
 #'
 #' @export
 reactives <- function(...) {
-  build_reactives(
-    list(...),
-    "reactives",
-    collection_label(sys.call(), "reactives")
-  )
+  build_reactives(list(...), "reactives")
 }
 
 #' @rdname reactives
@@ -151,8 +143,7 @@ reactives <- function(...) {
 reactive_vals <- function(...) {
   build_reactives(
     lapply(list(...), reactiveVal),
-    c("reactive_vals", "reactives"),
-    collection_label(sys.call(), "reactive_vals")
+    c("reactive_vals", "reactives")
   )
 }
 
@@ -198,7 +189,7 @@ slot_values <- function(x) {
   lapply(as.list(x), do.call, list())
 }
 
-build_reactives <- function(slots, class, label) {
+build_reactives <- function(slots, class) {
 
   slots <- slots[!vapply(slots, is.null, logical(1L))]
 
@@ -214,7 +205,7 @@ build_reactives <- function(slots, class, label) {
     abort("Each slot needs a distinct name.", "reactives_duplicate_name")
   }
 
-  res <- new_reactives(class, label)
+  res <- new_reactives(class)
 
   for (i in seq_along(slots)) {
     key <- if (named[[i]]) nms[[i]] else next_positional_key(res)
@@ -232,7 +223,7 @@ build_reactives <- function(slots, class, label) {
 # removal must still re-run when the key comes back. Since shiny destroys a
 # reactive along with the module it was created in, cells are created in the
 # collection's own reactive domain, whichever module first uses them.
-new_reactives <- function(class, label) {
+new_reactives <- function(class) {
 
   state <- new.env(parent = emptyenv())
   state$positions <- 0L
@@ -240,9 +231,11 @@ new_reactives <- function(class, label) {
   structure(
     list(
       cells = new.env(parent = emptyenv()),
-      keys = reactiveVal(character(), label = paste0("names(", label, ")")),
+      keys = reactiveVal(
+        character(),
+        label = paste0("names(", class[[1L]], ")")
+      ),
       domain = getDefaultReactiveDomain(),
-      label = label,
       state = state
     ),
     class = class
@@ -278,6 +271,15 @@ slot_cell <- function(x, key) {
   }
 
   cell
+}
+
+cell_label <- function(x, key) {
+
+  if (is_positional_key(key)) {
+    key <- sub(positional_marker(), "...", key, fixed = TRUE)
+  }
+
+  paste0(class(x)[[1L]], "$", key)
 }
 
 get_slot <- function(x, key) {
@@ -451,7 +453,7 @@ display_names <- function(keys) {
   slots <- lapply(sel, get_slot, x = x)
   names(slots) <- replace(sel, is_positional_key(sel), "")
 
-  build_reactives(slots, class(x), collection_label(sys.call(), class(x)))
+  build_reactives(slots, class(x))
 }
 
 #' @export

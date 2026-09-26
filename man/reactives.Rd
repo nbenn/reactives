@@ -125,16 +125,12 @@ work as they would inside \code{\link[shiny:isolate]{shiny::isolate()}} rather t
 
 \section{Reactlog}{
 
-In \href{https://rstudio.github.io/reactlog/}{reactlog}, a collection is named
-after the variable it was assigned to when created, as a
-\code{\link[shiny:reactiveValues]{shiny::reactiveValues()}} object is. After \code{x <- reactives(a = ...)}, the
-dependency on slot \code{a} shows as \code{x$a}, the one on which slots exist and in
-what order as \code{names(x)}, and those on unnamed slots as \code{x$...1}, \code{x$...2}
-and so on. Unnamed slots are numbered in the order they were added rather
-than by position, so a label survives reordering. The name is read from
-source references, and a collection created without them, as in an
-installed package, is named after its class and a number instead, as in
-\code{reactives1}.
+In \href{https://rstudio.github.io/reactlog/}{reactlog}, the dependency on slot
+\code{a} shows as \code{reactives$a}, or as \code{reactive_vals$a} in a \code{reactive_vals}
+collection, and the one on which slots exist and in what order as
+\code{names(reactives)}. Unnamed slots show as \code{reactives$...1}, \code{reactives$...2}
+and so on, numbered in the order they were added rather than by position,
+so a label survives reordering.
 }
 
 \examples{

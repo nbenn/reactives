@@ -4,12 +4,11 @@ snapshot_reactives <- function(x) {
 
   check_collection(x)
 
-  label <- collection_label(sys.call(), class(x))
   slots <- isolate(as.list(x))
 
   withReactiveDomain(
     NULL,
-    build_reactives(lapply(slots, snapshot_slot), class(x), label)
+    build_reactives(lapply(slots, snapshot_slot), class(x))
   )
 }
 

@@ -782,3 +782,26 @@ test_that("subscripts follow vctrs' rules rather than base R's", {
     }
   )
 })
+
+test_that("reactlog labels each slot with the class and key", {
+
+  labels <- reactlog_labels(
+    {
+      reactives(reactiveVal(1), a = reactiveVal(2), reactiveVal(3))
+      reactive_vals(b = 1)
+    }
+  )
+
+  expect_identical(
+    setdiff(
+      c(
+        "names(reactives)", "reactives$a", "reactives$...1",
+        "reactives$...2", "names(reactive_vals)", "reactive_vals$b"
+      ),
+      labels
+    ),
+    character()
+  )
+
+  expect_false("reactives$...3" %in% labels)
+})
