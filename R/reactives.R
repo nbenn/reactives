@@ -50,6 +50,16 @@
 #' module leaves the collection intact. A reactive bound to a slot, however,
 #' still belongs to the module it was created in.
 #'
+#' To keep reading a collection after its [shiny::testServer()] session has
+#' closed, a test can take a snapshot with `snapshot_reactives()` while the
+#' session is still open. A snapshot belongs to no session. For each
+#' [shiny::reactiveVal()] slot it holds a new [shiny::reactiveVal()] with the
+#' slot's current value, and for each other slot a [shiny::reactive()]
+#' returning its current value, so writing through a slot of the snapshot or
+#' of the original leaves the other unchanged. A slot that fails when computed
+#' fails the same way when its copy is called, rather than failing the
+#' snapshot. Names, order and class carry over.
+#'
 #' @section Dependencies:
 #' Reading a slot makes the caller depend on that slot alone. The caller
 #' re-runs when the slot is bound, replaced or removed, but not when other
@@ -61,9 +71,10 @@
 #' `slot_values()` and of slots by position, but not readers of slots by name.
 #'
 #' Printing, `format()` and `str()` make the caller depend on nothing, and they
-#' never call a slot, so they run no computed slot. Outside a reactive
-#' consumer, as at the console, `names()` and `length()` work as they would
-#' inside [shiny::isolate()] rather than fail.
+#' never call a slot, so they run no computed slot. Taking a snapshot also
+#' makes the caller depend on nothing, though it runs every computed slot.
+#' Outside a reactive consumer, as at the console, `names()` and `length()`
+#' work as they would inside [shiny::isolate()] rather than fail.
 #'
 #' @section Reactlog:
 #' In [reactlog](https://rstudio.github.io/reactlog/), a collection is named
@@ -83,10 +94,10 @@
 #'   `reorder()`.
 #'
 #' @return A `reactives` object, or for `reactive_vals()` a `reactive_vals`
-#'   object, which is also a `reactives` object. The `reorder()` method returns
-#'   `x`, invisibly, `slot_values()` returns a list of the slots' values, in
-#'   slot order and named as by `as.list()`, and `is_reactives()` returns
-#'   `TRUE` or `FALSE`.
+#'   object, which is also a `reactives` object. A snapshot has the class of
+#'   `x`. The `reorder()` method returns `x`, invisibly, `slot_values()`
+#'   returns a list of the slots' values, in slot order and named as by
+#'   `as.list()`, and `is_reactives()` returns `TRUE` or `FALSE`.
 #'
 #' @examples
 #' x <- reactives(a = shiny::reactiveVal(1), b = shiny::reactive(2 * 21))
@@ -112,6 +123,19 @@
 #'
 #' shiny::isolate(slot_values(y))
 #' is_reactives(y)
+#'
+#' # A snapshot outlives the session it was taken in
+#' snap <- NULL
+#' shiny::testServer(
+#'   function(input, output, session) {
+#'     x <- reactives(n = shiny::reactive(input$n))
+#'   },
+#'   {
+#'     session$setInputs(n = 21)
+#'     snap <<- snapshot_reactives(x)
+#'   }
+#' )
+#' shiny::isolate(snap$n())
 #'
 #' @export
 reactives <- function(...) {
