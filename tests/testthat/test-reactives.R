@@ -852,6 +852,20 @@ test_that("a key's cell is created when the key is first read", {
   expect_identical(reactlog_labels(isolate(y$a)), "reactives$a")
 })
 
+test_that("a key's cell is deleted once its slot is removed", {
+
+  x <- reactives(a = reactiveVal(1), b = reactiveVal(2))
+  isolate(list(x$a, x$b))
+
+  x$a <- NULL
+  names(x) <- "c"
+
+  expect_identical(
+    reactlog_labels(isolate(list(x$a, x$b))),
+    c("reactives$a", "reactives$b")
+  )
+})
+
 test_that("replacing a slot releases its old reactive", {
 
   with_session(
