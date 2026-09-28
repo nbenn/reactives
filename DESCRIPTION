@@ -15,6 +15,7 @@ Language: en-US
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 8.0.0
 Imports:
+    later,
     shiny (>= 1.14.0),
     stats,
     utils

@@ -110,10 +110,12 @@ snapshot. Names, order and class carry over.
 Reading a slot makes the caller depend on that slot alone. The caller
 re-runs when the slot is bound, replaced or removed, but not when other
 slots change. This also holds for a slot that does not exist yet, so a
-reader re-runs once the slot is added. Reading \code{names()} or \code{length()}
-depends on which slots exist and in what order, \code{as.list()} depends on that
-and on every slot, and \code{slot_values()} also on every slot's value.
-Reordering re-runs readers of \code{names()}, \code{length()}, \code{as.list()},
+reader re-runs once the slot is added. Subsetting with \code{[} by name depends
+on the named slots in the same way. Reading a slot by position, or
+subsetting by position, also depends on which slots exist and in what
+order, as reading \code{names()} or \code{length()} does. The \code{as.list()} method
+depends on that and on every slot, and \code{slot_values()} also on every slot's
+value. Reordering re-runs readers of \code{names()}, \code{length()}, \code{as.list()},
 \code{slot_values()} and of slots by position, but not readers of slots by name.
 
 Printing, \code{format()} and \code{str()} make the caller depend on nothing, and they
@@ -130,7 +132,9 @@ In \href{https://rstudio.github.io/reactlog/}{reactlog}, the dependency on slot
 collection, and the one on which slots exist and in what order as
 \code{names(reactives)}. Unnamed slots show as \code{reactives$...1}, \code{reactives$...2}
 and so on, numbered in the order they were added rather than by position,
-so a label survives reordering.
+so a label survives reordering. A read of every slot at once, such as
+\code{as.list()}, shows a single dependency on \code{reactives[]} instead of one per
+slot. The entry for a slot only appears once the slot has been read.
 }
 
 \examples{

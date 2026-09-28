@@ -787,8 +787,18 @@ test_that("reactlog labels each slot with the class and key", {
 
   labels <- reactlog_labels(
     {
-      reactives(reactiveVal(1), a = reactiveVal(2), reactiveVal(3))
-      reactive_vals(b = 1)
+      x <- reactives(reactiveVal(1), a = reactiveVal(2), reactiveVal(3))
+      y <- reactive_vals(b = 1)
+
+      isolate(
+        {
+          x[[1]]
+          x$a
+          x[[3]]
+          y$b
+          as.list(x)
+        }
+      )
     }
   )
 
@@ -796,7 +806,8 @@ test_that("reactlog labels each slot with the class and key", {
     setdiff(
       c(
         "names(reactives)", "reactives$a", "reactives$...1",
-        "reactives$...2", "names(reactive_vals)", "reactive_vals$b"
+        "reactives$...2", "names(reactive_vals)", "reactive_vals$b",
+        "reactives[]"
       ),
       labels
     ),
@@ -804,4 +815,141 @@ test_that("reactlog labels each slot with the class and key", {
   )
 
   expect_false("reactives$...3" %in% labels)
+})
+
+test_that("a key's cell is created when the key is first read", {
+
+  labels <- reactlog_labels(
+    {
+      x <- reactives(a = reactiveVal(1), reactiveVal(2))
+      y <- isolate(x[])
+      capture.output(str(x), str(y), print(y))
+    }
+  )
+
+  expect_identical(grep("$", labels, fixed = TRUE, value = TRUE), character())
+
+  expect_identical(reactlog_labels(isolate(y$a)), "reactives$a")
+})
+
+test_that("replacing a slot releases its old reactive", {
+
+  with_session(
+    {
+      released <- FALSE
+      mark <- function(e) released <<- TRUE
+
+      tracked <- new.env()
+      reg.finalizer(tracked, mark)
+
+      x <- reactives(a = reactiveVal(tracked))
+      rm(tracked)
+
+      x$a
+      x$a <- reactiveVal(2)
+      gc()
+
+      expect_true(released)
+    }
+  )
+})
+
+test_that("a collection made in a session is released once dropped", {
+
+  with_session(
+    {
+      released <- FALSE
+      mark <- function(e) released <<- TRUE
+
+      x <- reactives(a = reactiveVal(1), b = reactiveVal(2))
+      y <- x["a"]
+      as.list(y)
+
+      reg.finalizer(.subset2(y, "state"), mark)
+      rm(y)
+      gc()
+
+      expect_true(released)
+    }
+  )
+})
+
+test_that("subsetting by name depends on the named slots alone", {
+
+  with_session(
+    {
+      x <- reactive_vals(a = 1, b = 2)
+
+      runs <- 0
+      observe(
+        {
+          runs <<- runs + 1
+          x["a"]
+        }
+      )
+      session$flushReact()
+
+      x$c <- reactiveVal(3)
+      x$b <- NULL
+      names(x) <- c("a", "d")
+      reorder(x, c("d", "a"))
+      session$flushReact()
+
+      expect_identical(runs, 1)
+
+      x$a <- reactiveVal(10)
+      session$flushReact()
+
+      expect_identical(runs, 2)
+    }
+  )
+})
+
+test_that("subsetting by a missing name re-runs once the slot is added", {
+
+  with_session(
+    {
+      x <- reactives()
+
+      seen <- "unset"
+      observe(
+        seen <<- tryCatch(x["a"], reactives_unknown_name = function(e) NULL)
+      )
+      session$flushReact()
+
+      expect_null(seen)
+
+      a <- reactiveVal(1)
+      x$a <- a
+      session$flushReact()
+
+      expect_identical(seen$a, a)
+    }
+  )
+})
+
+test_that("subsetting by position depends on the order and the slots", {
+
+  with_session(
+    {
+      x <- reactive_vals(a = 1, b = 2)
+
+      first <- NULL
+      every <- NULL
+      observe(first <<- names(x[1]))
+      observe(every <<- x[c(2, 1)])
+      session$flushReact()
+
+      reorder(x, c("b", "a"))
+      session$flushReact()
+
+      expect_identical(first, "b")
+
+      a <- reactiveVal(3)
+      x$a <- a
+      session$flushReact()
+
+      expect_identical(every$a, a)
+    }
+  )
 })

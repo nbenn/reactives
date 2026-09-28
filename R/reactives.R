@@ -64,10 +64,12 @@
 #' Reading a slot makes the caller depend on that slot alone. The caller
 #' re-runs when the slot is bound, replaced or removed, but not when other
 #' slots change. This also holds for a slot that does not exist yet, so a
-#' reader re-runs once the slot is added. Reading `names()` or `length()`
-#' depends on which slots exist and in what order, `as.list()` depends on that
-#' and on every slot, and `slot_values()` also on every slot's value.
-#' Reordering re-runs readers of `names()`, `length()`, `as.list()`,
+#' reader re-runs once the slot is added. Subsetting with `[` by name depends
+#' on the named slots in the same way. Reading a slot by position, or
+#' subsetting by position, also depends on which slots exist and in what
+#' order, as reading `names()` or `length()` does. The `as.list()` method
+#' depends on that and on every slot, and `slot_values()` also on every slot's
+#' value. Reordering re-runs readers of `names()`, `length()`, `as.list()`,
 #' `slot_values()` and of slots by position, but not readers of slots by name.
 #'
 #' Printing, `format()` and `str()` make the caller depend on nothing, and they
@@ -82,7 +84,9 @@
 #' collection, and the one on which slots exist and in what order as
 #' `names(reactives)`. Unnamed slots show as `reactives$...1`, `reactives$...2`
 #' and so on, numbered in the order they were added rather than by position,
-#' so a label survives reordering.
+#' so a label survives reordering. A read of every slot at once, such as
+#' `as.list()`, shows a single dependency on `reactives[]` instead of one per
+#' slot. The entry for a slot only appears once the slot has been read.
 #'
 #' @param ... For `reactives()` and `reactive_vals()`, the slots to hold, named
 #'   or unnamed: reactives, with `NULL` entries dropped, for `reactives()`, and
@@ -193,53 +197,91 @@ build_reactives <- function(slots, class) {
 
   slots <- slots[!vapply(slots, is.null, logical(1L))]
 
-  nms <- names(slots)
+  keys <- names(slots)
 
-  if (is.null(nms)) {
-    nms <- character(length(slots))
+  if (is.null(keys)) {
+    keys <- character(length(slots))
   }
 
-  named <- nzchar(nms)
+  named <- nzchar(keys)
 
-  if (anyDuplicated(nms[named])) {
+  if (anyDuplicated(keys[named])) {
     abort("Each slot needs a distinct name.", "reactives_duplicate_name")
   }
 
   res <- new_reactives(class)
 
-  for (i in seq_along(slots)) {
-    key <- if (named[[i]]) nms[[i]] else next_positional_key(res)
-    bind_slot(res, key, slots[[i]])
+  for (slot in slots) {
+    check_slot(res, slot)
   }
+
+  for (i in which(!named)) {
+    keys[[i]] <- next_positional_key(res)
+  }
+
+  names(slots) <- keys
+  list2env(slots, envir = .subset2(res, "slots"))
+
+  set_keys(res, keys)
 
   res
 }
 
-# The collection keeps one `reactiveVal()` cell per key, holding the slot's
-# reactive or `NULL` when the key has no slot, plus an ordered `keys`
-# `reactiveVal()` that is the only record of which slots exist. Reading a key
-# subscribes to its cell alone, even when the key has no slot yet, so cells
-# are created on first use and are never deleted: a reader subscribed before a
+# The slots live in a plain environment, and an ordered `keys` `reactiveVal()`
+# is the only reactive record of which slots exist. Reading a key subscribes to
+# a `reactiveVal()` cell for that key alone, holding the slot's reactive or
+# `NULL` when the key has no slot, while a read of every slot subscribes to one
+# cell for the whole collection. Creating a cell costs far more than storing a
+# slot, so cells are created on first read, and binding a slot writes only the
+# cells that exist. They are never deleted: a reader subscribed before a
 # removal must still re-run when the key comes back. Since shiny destroys a
 # reactive along with the module it was created in, cells are created in the
-# collection's own reactive domain, whichever module first uses them.
+# collection's own reactive domain, whichever module first reads them.
 new_reactives <- function(class) {
 
   state <- new.env(parent = emptyenv())
   state$positions <- 0L
+  state$changes <- 0L
+
+  domain <- getDefaultReactiveDomain()
+  lifetime <- watch_domain(domain)
+
+  # The domain keeps its destroy callbacks until it ends, so the one flagging
+  # this collection is unregistered once the collection is garbage collected.
+  # A finalizer can run in the middle of shiny changing that same registry, so
+  # the removal waits for the event loop.
+  if (is.function(lifetime$unregister)) {
+    reg.finalizer(state, function(e) later::later(lifetime$unregister))
+  }
 
   structure(
     list(
+      slots = new.env(parent = emptyenv()),
       cells = new.env(parent = emptyenv()),
       keys = reactiveVal(
         character(),
         label = paste0("names(", class[[1L]], ")")
       ),
-      domain = getDefaultReactiveDomain(),
-      state = state
+      domain = domain,
+      state = state,
+      lifetime = lifetime
     ),
     class = class
   )
+}
+
+watch_domain <- function(domain) {
+
+  lifetime <- new.env(parent = emptyenv())
+  lifetime$destroyed <- FALSE
+
+  if (is.function(domain$onDestroy)) {
+    lifetime$unregister <- domain$onDestroy(
+      function() lifetime$destroyed <- TRUE
+    )
+  }
+
+  lifetime
 }
 
 raw_keys <- function(x) {
@@ -263,12 +305,46 @@ slot_cell <- function(x, key) {
   cell <- cells[[key]]
 
   if (is.null(cell)) {
-    cell <- withReactiveDomain(
-      .subset2(x, "domain"),
-      reactiveVal(NULL, label = cell_label(x, key))
-    )
+    cell <- new_cell(x, .subset2(x, "slots")[[key]], cell_label(x, key))
     assign(key, cell, envir = cells)
   }
+
+  cell
+}
+
+all_slots_cell <- function(x) {
+
+  state <- .subset2(x, "state")
+
+  if (is.null(state$all_slots)) {
+    state$all_slots <- new_cell(
+      x,
+      state$changes,
+      paste0(class(x)[[1L]], "[]")
+    )
+  }
+
+  state$all_slots
+}
+
+new_cell <- function(x, value, label) {
+
+  # Destroying a domain destroys the reactives created in it so far, but not
+  # one created afterwards. Reading the destroyed keys raises shiny's error
+  # rather than creating a cell that would outlive the collection.
+  if (.subset2(x, "lifetime")$destroyed) {
+    raw_keys(x)
+  }
+
+  # A `reactiveVal()` holds on to its initial value for as long as it exists,
+  # so a cell starts empty and is set afterwards. Starting it at the slot
+  # would keep that slot alive once it is replaced.
+  cell <- withReactiveDomain(
+    .subset2(x, "domain"),
+    reactiveVal(NULL, label = label)
+  )
+
+  cell(value)
 
   cell
 }
@@ -284,6 +360,10 @@ cell_label <- function(x, key) {
 
 get_slot <- function(x, key) {
   slot_cell(x, key)()
+}
+
+peek_slots <- function(x, keys) {
+  mget(keys, envir = .subset2(x, "slots"))
 }
 
 check_slot <- function(x, value) {
@@ -325,9 +405,9 @@ bind_slot <- function(x, key, value) {
 
   check_slot(x, value)
 
-  slot_cell(x, key)(value)
-
   keys <- isolate(raw_keys(x))
+
+  write_slot(x, key, value)
 
   if (!key %in% keys) {
     set_keys(x, c(keys, key))
@@ -341,8 +421,38 @@ remove_slot <- function(x, key) {
   keys <- isolate(raw_keys(x))
 
   if (key %in% keys) {
-    slot_cell(x, key)(NULL)
+    write_slot(x, key, NULL)
     set_keys(x, setdiff(keys, key))
+  }
+
+  invisible(x)
+}
+
+write_slot <- function(x, key, value) {
+
+  slots <- .subset2(x, "slots")
+
+  if (identical(slots[[key]], value)) {
+    return(invisible(x))
+  }
+
+  if (is.null(value)) {
+    rm(list = key, envir = slots)
+  } else {
+    assign(key, value, envir = slots)
+  }
+
+  cell <- .subset2(x, "cells")[[key]]
+
+  if (!is.null(cell)) {
+    cell(value)
+  }
+
+  state <- .subset2(x, "state")
+
+  if (!is.null(state$all_slots)) {
+    state$changes <- state$changes + 1L
+    state$all_slots(state$changes)
   }
 
   invisible(x)
@@ -447,13 +557,50 @@ display_names <- function(keys) {
 #' @export
 `[.reactives` <- function(x, i) {
 
-  keys <- raw_keys(x)
-  sel <- if (missing(i)) keys else select_keys(keys, i)
-
-  slots <- lapply(sel, get_slot, x = x)
-  names(slots) <- replace(sel, is_positional_key(sel), "")
+  if (missing(i)) {
+    slots <- as.list(x)
+  } else if (is_name_subscript(i)) {
+    slots <- named_slots(x, subscript_names(i))
+  } else {
+    slots <- positioned_slots(x, i)
+  }
 
   build_reactives(slots, class(x))
+}
+
+named_slots <- function(x, i) {
+
+  slots <- lapply(i, get_slot, x = x)
+
+  unknown <- vapply(slots, is.null, logical(1L)) | is_positional_key(i)
+
+  if (any(unknown)) {
+    abort(
+      paste0("Unknown slot names: ", paste(i[unknown], collapse = ", "), "."),
+      "reactives_unknown_name"
+    )
+  }
+
+  names(slots) <- i
+
+  slots
+}
+
+positioned_slots <- function(x, i) {
+
+  keys <- raw_keys(x)
+  sel <- select_keys(keys, i)
+
+  if (all(keys %in% sel)) {
+    all_slots_cell(x)()
+    slots <- peek_slots(x, sel)
+  } else {
+    slots <- lapply(sel, get_slot, x = x)
+  }
+
+  names(slots) <- replace(sel, is_positional_key(sel), "")
+
+  slots
 }
 
 #' @export
@@ -520,16 +667,16 @@ names.reactives <- function(x) {
     return(x)
   }
 
-  # Read every moving slot before writing any cell, so that swapping two names
-  # does not overwrite a slot before it has moved.
-  slots <- isolate(lapply(keys[moved], get_slot, x = x))
+  # Read every moving slot before writing any, so that swapping two names does
+  # not overwrite a slot before it has moved.
+  slots <- peek_slots(x, keys[moved])
 
   for (key in setdiff(keys, new_keys)) {
-    slot_cell(x, key)(NULL)
+    write_slot(x, key, NULL)
   }
 
   for (j in seq_along(slots)) {
-    slot_cell(x, new_keys[moved][[j]])(slots[[j]])
+    write_slot(x, new_keys[moved][[j]], slots[[j]])
   }
 
   set_keys(x, new_keys)
@@ -546,8 +693,9 @@ length.reactives <- function(x) {
 as.list.reactives <- function(x, ...) {
 
   keys <- raw_keys(x)
+  all_slots_cell(x)()
 
-  res <- lapply(keys, get_slot, x = x)
+  res <- peek_slots(x, keys)
   names(res) <- display_names(keys)
 
   res
@@ -584,7 +732,7 @@ print.reactives <- function(x, ...) {
 str.reactives <- function(object, ..., indent.str = " ") {
 
   keys <- isolate(raw_keys(object))
-  slots <- isolate(lapply(keys, get_slot, x = object))
+  slots <- peek_slots(object, keys)
 
   cat(format_header(object, length(keys)), "\n", sep = "")
 
