@@ -832,6 +832,28 @@ test_that("a key's cell is created when the key is first read", {
   expect_identical(reactlog_labels(isolate(y$a)), "reactives$a")
 })
 
+test_that("replacing a slot releases its old reactive", {
+
+  with_session(
+    {
+      released <- FALSE
+      mark <- function(e) released <<- TRUE
+
+      tracked <- new.env()
+      reg.finalizer(tracked, mark)
+
+      x <- reactives(a = reactiveVal(tracked))
+      rm(tracked)
+
+      x$a
+      x$a <- reactiveVal(2)
+      gc()
+
+      expect_true(released)
+    }
+  )
+})
+
 test_that("subsetting by name depends on the named slots alone", {
 
   with_session(

@@ -317,10 +317,17 @@ new_cell <- function(x, value, label) {
     raw_keys(x)
   }
 
-  withReactiveDomain(
+  # A `reactiveVal()` holds on to its initial value for as long as it exists,
+  # so a cell starts empty and is set afterwards. Starting it at the slot
+  # would keep that slot alive once it is replaced.
+  cell <- withReactiveDomain(
     .subset2(x, "domain"),
-    reactiveVal(value, label = label)
+    reactiveVal(NULL, label = label)
   )
+
+  cell(value)
+
+  cell
 }
 
 cell_label <- function(x, key) {
