@@ -43,12 +43,24 @@
 #' holds `x`, while `reorder(x, order)` reorders the shared collection itself.
 #' Renaming with `names<-` keeps every slot at its position, as for a list.
 #'
+#' A copy made with `[` is shallow: its slots hold the same reactives as the
+#' original, so after `y <- x["a"]`, calling `y$a(10)` also sets the value of
+#' `x$a()`. A deep copy, made with `copy_reactives(x, deep = TRUE)`, gives each
+#' [shiny::reactiveVal()] slot a new [shiny::reactiveVal()] holding the slot's
+#' current value, so writing through a slot of the copy leaves the original
+#' unchanged. Any other slot, such as a [shiny::reactive()], stays shared,
+#' since it can't be copied and can't be written through either. A computed
+#' slot that reads slots of the original keeps reading the original, not the
+#' copy. By default, `copy_reactives()` makes the same shallow copy as `x[]`.
+#'
 #' @section Lifetime:
 #' A collection belongs to the session or module it was created in and is
 #' destroyed along with it, as a [shiny::reactiveVal()] is. Reading or changing
 #' it from another module doesn't tie it to that module, so destroying the
 #' module leaves the collection intact. A reactive bound to a slot, however,
-#' still belongs to the module it was created in.
+#' still belongs to the module it was created in. A copy belongs to the session
+#' or module it is made in, and so does each new [shiny::reactiveVal()] of a
+#' deep copy.
 #'
 #' To keep reading a collection after its [shiny::testServer()] session has
 #' closed, a test can take a snapshot with `snapshot_reactives()` while the
@@ -69,8 +81,11 @@
 #' subsetting by position, also depends on which slots exist and in what
 #' order, as reading `names()` or `length()` does. The `as.list()` method
 #' depends on that and on every slot, and `slot_values()` also on every slot's
-#' value. Reordering re-runs readers of `names()`, `length()`, `as.list()`,
-#' `slot_values()` and of slots by position, but not readers of slots by name.
+#' value. Copying, with `x[]` or `copy_reactives()`, has the same dependencies
+#' as `as.list()`. A deep copy reads the values it copies without depending on
+#' them, and it runs no computed slot. Reordering re-runs readers of
+#' `names()`, `length()`, `as.list()`, `slot_values()` and of slots by
+#' position, but not readers of slots by name.
 #'
 #' Printing, `format()` and `str()` make the caller depend on nothing, and they
 #' never call a slot, so they run no computed slot. Taking a snapshot also
@@ -94,10 +109,10 @@
 #'   `reorder()`.
 #'
 #' @return A `reactives` object, or for `reactive_vals()` a `reactive_vals`
-#'   object, which is also a `reactives` object. A snapshot has the class of
-#'   `x`. The `reorder()` method returns `x`, invisibly, `slot_values()`
-#'   returns a list of the slots' values, in slot order and named as by
-#'   `as.list()`, and `is_reactives()` returns `TRUE` or `FALSE`.
+#'   object, which is also a `reactives` object. A copy or a snapshot has the
+#'   class of `x`. The `reorder()` method returns `x`, invisibly,
+#'   `slot_values()` returns a list of the slots' values, in slot order and
+#'   named as by `as.list()`, and `is_reactives()` returns `TRUE` or `FALSE`.
 #'
 #' @examples
 #' x <- reactives(a = shiny::reactiveVal(1), b = shiny::reactive(2 * 21))
@@ -123,6 +138,11 @@
 #'
 #' shiny::isolate(slot_values(y))
 #' is_reactives(y)
+#'
+#' # A deep copy holds values of its own
+#' w <- shiny::isolate(copy_reactives(y, deep = TRUE))
+#' shiny::isolate(w$n(2))
+#' shiny::isolate(c(y$n(), w$n()))
 #'
 #' # A snapshot outlives the session it was taken in
 #' snap <- NULL
@@ -191,6 +211,32 @@ is_reactives <- function(x) {
 slot_values <- function(x) {
   check_collection(x)
   lapply(as.list(x), do.call, list())
+}
+
+#' @param deep Whether to give each [shiny::reactiveVal()] slot of the copy a
+#'   new [shiny::reactiveVal()] holding the slot's current value, rather than
+#'   the one in `x`.
+#'
+#' @rdname reactives
+#' @export
+copy_reactives <- function(x, deep = FALSE) {
+
+  check_collection(x)
+
+  if (!isTRUE(deep) && !isFALSE(deep)) {
+    abort("Expected `deep` to be `TRUE` or `FALSE`.", "reactives_bad_flag")
+  }
+
+  slots <- as.list(x)
+
+  if (deep) {
+
+    stored <- vapply(slots, inherits, logical(1L), "reactiveVal")
+    values <- isolate(lapply(slots[stored], do.call, list()))
+    slots[stored] <- lapply(values, reactiveVal)
+  }
+
+  build_reactives(slots, class(x))
 }
 
 build_reactives <- function(slots, class) {

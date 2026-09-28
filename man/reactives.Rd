@@ -6,6 +6,7 @@
 \alias{reorder.reactives}
 \alias{is_reactives}
 \alias{slot_values}
+\alias{copy_reactives}
 \alias{snapshot_reactives}
 \title{Keyed collections of reactives}
 \usage{
@@ -19,6 +20,8 @@ is_reactives(x)
 
 slot_values(x)
 
+copy_reactives(x, deep = FALSE)
+
 snapshot_reactives(x)
 }
 \arguments{
@@ -31,13 +34,17 @@ any values, including \code{NULL}, for \code{reactive_vals()}. Ignored by
 
 \item{order}{The new order, listing every slot exactly once: by position, or
 by name when all slots are named.}
+
+\item{deep}{Whether to give each \code{\link[shiny:reactiveVal]{shiny::reactiveVal()}} slot of the copy a
+new \code{\link[shiny:reactiveVal]{shiny::reactiveVal()}} holding the slot's current value, rather than
+the one in \code{x}.}
 }
 \value{
 A \code{reactives} object, or for \code{reactive_vals()} a \code{reactive_vals}
-object, which is also a \code{reactives} object. A snapshot has the class of
-\code{x}. The \code{reorder()} method returns \code{x}, invisibly, \code{slot_values()}
-returns a list of the slots' values, in slot order and named as by
-\code{as.list()}, and \code{is_reactives()} returns \code{TRUE} or \code{FALSE}.
+object, which is also a \code{reactives} object. A copy or a snapshot has the
+class of \code{x}. The \code{reorder()} method returns \code{x}, invisibly,
+\code{slot_values()} returns a list of the slots' values, in slot order and
+named as by \code{as.list()}, and \code{is_reactives()} returns \code{TRUE} or \code{FALSE}.
 }
 \description{
 A \code{reactives} object is a keyed collection of shiny reactives, such as
@@ -84,6 +91,16 @@ of slots, holding the same reactives, and \code{x[]} copies the whole collection
 So \code{x <- x[order]} gives a reordered copy, which suffices when nothing else
 holds \code{x}, while \code{reorder(x, order)} reorders the shared collection itself.
 Renaming with \verb{names<-} keeps every slot at its position, as for a list.
+
+A copy made with \code{[} is shallow: its slots hold the same reactives as the
+original, so after \code{y <- x["a"]}, calling \code{y$a(10)} also sets the value of
+\code{x$a()}. A deep copy, made with \code{copy_reactives(x, deep = TRUE)}, gives each
+\code{\link[shiny:reactiveVal]{shiny::reactiveVal()}} slot a new \code{\link[shiny:reactiveVal]{shiny::reactiveVal()}} holding the slot's
+current value, so writing through a slot of the copy leaves the original
+unchanged. Any other slot, such as a \code{\link[shiny:reactive]{shiny::reactive()}}, stays shared,
+since it can't be copied and can't be written through either. A computed
+slot that reads slots of the original keeps reading the original, not the
+copy. By default, \code{copy_reactives()} makes the same shallow copy as \code{x[]}.
 }
 
 \section{Lifetime}{
@@ -92,7 +109,9 @@ A collection belongs to the session or module it was created in and is
 destroyed along with it, as a \code{\link[shiny:reactiveVal]{shiny::reactiveVal()}} is. Reading or changing
 it from another module doesn't tie it to that module, so destroying the
 module leaves the collection intact. A reactive bound to a slot, however,
-still belongs to the module it was created in.
+still belongs to the module it was created in. A copy belongs to the session
+or module it is made in, and so does each new \code{\link[shiny:reactiveVal]{shiny::reactiveVal()}} of a
+deep copy.
 
 To keep reading a collection after its \code{\link[shiny:testServer]{shiny::testServer()}} session has
 closed, a test can take a snapshot with \code{snapshot_reactives()} while the
@@ -115,8 +134,11 @@ on the named slots in the same way. Reading a slot by position, or
 subsetting by position, also depends on which slots exist and in what
 order, as reading \code{names()} or \code{length()} does. The \code{as.list()} method
 depends on that and on every slot, and \code{slot_values()} also on every slot's
-value. Reordering re-runs readers of \code{names()}, \code{length()}, \code{as.list()},
-\code{slot_values()} and of slots by position, but not readers of slots by name.
+value. Copying, with \code{x[]} or \code{copy_reactives()}, has the same dependencies
+as \code{as.list()}. A deep copy reads the values it copies without depending on
+them, and it runs no computed slot. Reordering re-runs readers of
+\code{names()}, \code{length()}, \code{as.list()}, \code{slot_values()} and of slots by
+position, but not readers of slots by name.
 
 Printing, \code{format()} and \code{str()} make the caller depend on nothing, and they
 never call a slot, so they run no computed slot. Taking a snapshot also
@@ -161,6 +183,11 @@ shiny::isolate(names(z))
 
 shiny::isolate(slot_values(y))
 is_reactives(y)
+
+# A deep copy holds values of its own
+w <- shiny::isolate(copy_reactives(y, deep = TRUE))
+shiny::isolate(w$n(2))
+shiny::isolate(c(y$n(), w$n()))
 
 # A snapshot outlives the session it was taken in
 snap <- NULL
