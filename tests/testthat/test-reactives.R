@@ -716,6 +716,27 @@ test_that("[<- checks every value before changing anything", {
   )
 })
 
+test_that("[<- applies duplicate targets in order", {
+
+  with_session(
+    {
+      a1 <- reactiveVal(1)
+      a2 <- reactiveVal(2)
+      x <- reactives(a = reactiveVal(0), b = reactiveVal(3))
+
+      x[c("a", "a")] <- list(a1, a2)
+      expect_identical(x$a, a2)
+
+      x[c("a", "a")] <- list(NULL, a1)
+      expect_identical(names(x), c("b", "a"))
+      expect_identical(x$a, a1)
+
+      x[c("a", "a")] <- list(a2, NULL)
+      expect_identical(names(x), "b")
+    }
+  )
+})
+
 test_that("reactive_vals() only accepts reactiveVal slots", {
 
   with_session(

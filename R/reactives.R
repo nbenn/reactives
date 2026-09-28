@@ -766,8 +766,22 @@ positioned_slots <- function(x, i) {
   }
 
   for (j in seq_along(targets)) {
-    assign_slot(x, targets[[j]], values[[j]])
+
+    key <- targets[[j]]
+    write_slot(x, key, values[[j]])
+
+    if (is.null(values[[j]])) {
+      keys <- keys[keys != key]
+    } else if (!key %in% keys) {
+      keys <- c(keys, key)
+    }
   }
+
+  set_keys(x, keys)
+
+  # Rebinding a slot in place leaves its key where it was, so `set_keys()`
+  # doesn't refresh its position.
+  refresh_positions(x, which(keys %in% targets))
 
   x
 }
