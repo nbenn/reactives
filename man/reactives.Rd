@@ -130,7 +130,9 @@ In \href{https://rstudio.github.io/reactlog/}{reactlog}, the dependency on slot
 collection, and the one on which slots exist and in what order as
 \code{names(reactives)}. Unnamed slots show as \code{reactives$...1}, \code{reactives$...2}
 and so on, numbered in the order they were added rather than by position,
-so a label survives reordering.
+so a label survives reordering. A read of every slot at once, such as
+\code{as.list()}, shows a single dependency on \code{reactives[]} instead of one per
+slot. The entry for a slot only appears once the slot has been read.
 }
 
 \examples{

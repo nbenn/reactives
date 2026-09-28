@@ -787,8 +787,18 @@ test_that("reactlog labels each slot with the class and key", {
 
   labels <- reactlog_labels(
     {
-      reactives(reactiveVal(1), a = reactiveVal(2), reactiveVal(3))
-      reactive_vals(b = 1)
+      x <- reactives(reactiveVal(1), a = reactiveVal(2), reactiveVal(3))
+      y <- reactive_vals(b = 1)
+
+      isolate(
+        {
+          x[[1]]
+          x$a
+          x[[3]]
+          y$b
+          as.list(x)
+        }
+      )
     }
   )
 
@@ -796,7 +806,8 @@ test_that("reactlog labels each slot with the class and key", {
     setdiff(
       c(
         "names(reactives)", "reactives$a", "reactives$...1",
-        "reactives$...2", "names(reactive_vals)", "reactive_vals$b"
+        "reactives$...2", "names(reactive_vals)", "reactive_vals$b",
+        "reactives[]"
       ),
       labels
     ),
@@ -804,4 +815,45 @@ test_that("reactlog labels each slot with the class and key", {
   )
 
   expect_false("reactives$...3" %in% labels)
+})
+
+test_that("a key's cell is created when the key is first read", {
+
+  labels <- reactlog_labels(
+    {
+      x <- reactives(a = reactiveVal(1), reactiveVal(2))
+      y <- isolate(x[])
+      capture.output(str(x), str(y), print(y))
+    }
+  )
+
+  expect_identical(grep("$", labels, fixed = TRUE, value = TRUE), character())
+
+  expect_identical(reactlog_labels(isolate(y$a)), "reactives$a")
+})
+
+test_that("subsetting by position depends on the order and the slots", {
+
+  with_session(
+    {
+      x <- reactive_vals(a = 1, b = 2)
+
+      first <- NULL
+      every <- NULL
+      observe(first <<- names(x[1]))
+      observe(every <<- x[c(2, 1)])
+      session$flushReact()
+
+      reorder(x, c("b", "a"))
+      session$flushReact()
+
+      expect_identical(first, "b")
+
+      a <- reactiveVal(3)
+      x$a <- a
+      session$flushReact()
+
+      expect_identical(every$a, a)
+    }
+  )
 })
