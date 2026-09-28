@@ -45,13 +45,13 @@
 #'
 #' A copy made with `[` is shallow: its slots hold the same reactives as the
 #' original, so after `y <- x["a"]`, calling `y$a(10)` also sets the value of
-#' `x$a()`. A deep copy, made with `copy_reactives(x, deep = TRUE)`, gives each
+#' `x$a()`. A deep copy, made with `copy(x, deep = TRUE)`, gives each
 #' [shiny::reactiveVal()] slot a new [shiny::reactiveVal()] holding the slot's
 #' current value, so writing through a slot of the copy leaves the original
 #' unchanged. Any other slot, such as a [shiny::reactive()], stays shared,
 #' since it can't be copied and can't be written through either. A computed
 #' slot that reads slots of the original keeps reading the original, not the
-#' copy. By default, `copy_reactives()` makes the same shallow copy as `x[]`.
+#' copy. By default, `copy()` makes the same shallow copy as `x[]`.
 #'
 #' @section Lifetime:
 #' A collection belongs to the session or module it was created in and is
@@ -81,8 +81,8 @@
 #' subsetting by position, also depends on which slots exist and in what
 #' order, as reading `names()` or `length()` does. The `as.list()` method
 #' depends on that and on every slot, and `slot_values()` also on every slot's
-#' value. Copying, with `x[]` or `copy_reactives()`, has the same dependencies
-#' as `as.list()`. A deep copy reads the values it copies without depending on
+#' value. Copying, with `x[]` or `copy()`, has the same dependencies as
+#' `as.list()`. A deep copy reads the values it copies without depending on
 #' them, and it runs no computed slot. Reordering re-runs readers of
 #' `names()`, `length()`, `as.list()`, `slot_values()` and of slots by
 #' position, but not readers of slots by name.
@@ -140,7 +140,7 @@
 #' is_reactives(y)
 #'
 #' # A deep copy holds values of its own
-#' w <- shiny::isolate(copy_reactives(y, deep = TRUE))
+#' w <- shiny::isolate(copy(y, deep = TRUE))
 #' shiny::isolate(w$n(2))
 #' shiny::isolate(c(y$n(), w$n()))
 #'
@@ -219,7 +219,7 @@ slot_values <- function(x) {
 #'
 #' @rdname reactives
 #' @export
-copy_reactives <- function(x, deep = FALSE) {
+copy <- function(x, deep = FALSE) {
 
   check_collection(x)
 
