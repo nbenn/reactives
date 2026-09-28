@@ -294,11 +294,14 @@ build_reactives <- function(slots, class) {
 # `length()` to one holding the number of slots, and a read of every slot to
 # one for the whole collection. Creating a cell costs far more than storing a
 # slot, so cells are created on first read, and changing a collection writes
-# only the cells that exist. They are never deleted: a reader subscribed
-# before a removal must still re-run when the key comes back. Since shiny
-# destroys a reactive along with the module it was created in, cells are
-# created in the collection's own reactive domain, whichever module first
-# reads them.
+# only the cells that exist. Removing a slot writes `NULL` to its key's cell
+# and then deletes the cell, which by then has no subscribers: the write
+# invalidated every reader. A reader that reads the key again creates a new
+# cell, and that is the one that fires when the key comes back. A cell whose
+# key has no slot stays, because its readers are waiting for the key to
+# appear. Since shiny destroys a reactive along with the module it was created
+# in, cells are created in the collection's own reactive domain, whichever
+# module first reads them.
 new_reactives <- function(class) {
 
   state <- new.env(parent = emptyenv())
@@ -584,10 +587,16 @@ write_slot <- function(x, key, value) {
     assign(key, value, envir = slots)
   }
 
-  cell <- .subset2(x, "cells")[[key]]
+  cells <- .subset2(x, "cells")
+  cell <- cells[[key]]
 
   if (!is.null(cell)) {
+
     cell(value)
+
+    if (is.null(value)) {
+      rm(list = key, envir = cells)
+    }
   }
 
   state <- .subset2(x, "state")
