@@ -854,6 +854,26 @@ test_that("replacing a slot releases its old reactive", {
   )
 })
 
+test_that("a collection made in a session is released once dropped", {
+
+  with_session(
+    {
+      released <- FALSE
+      mark <- function(e) released <<- TRUE
+
+      x <- reactives(a = reactiveVal(1), b = reactiveVal(2))
+      y <- x["a"]
+      as.list(y)
+
+      reg.finalizer(.subset2(y, "state"), mark)
+      rm(y)
+      gc()
+
+      expect_true(released)
+    }
+  )
+})
+
 test_that("subsetting by name depends on the named slots alone", {
 
   with_session(

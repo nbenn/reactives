@@ -242,12 +242,14 @@ new_reactives <- function(class) {
   state <- new.env(parent = emptyenv())
   state$positions <- 0L
   state$changes <- 0L
-  state$destroyed <- FALSE
 
   domain <- getDefaultReactiveDomain()
+  lifetime <- watch_domain(domain)
 
-  if (is.function(domain$onDestroy)) {
-    domain$onDestroy(function() state$destroyed <- TRUE)
+  # The domain keeps its destroy callbacks until it ends, so the one flagging
+  # this collection is unregistered once the collection is garbage collected.
+  if (is.function(lifetime$unregister)) {
+    reg.finalizer(state, function(e) lifetime$unregister())
   }
 
   structure(
@@ -259,10 +261,25 @@ new_reactives <- function(class) {
         label = paste0("names(", class[[1L]], ")")
       ),
       domain = domain,
-      state = state
+      state = state,
+      lifetime = lifetime
     ),
     class = class
   )
+}
+
+watch_domain <- function(domain) {
+
+  lifetime <- new.env(parent = emptyenv())
+  lifetime$destroyed <- FALSE
+
+  if (is.function(domain$onDestroy)) {
+    lifetime$unregister <- domain$onDestroy(
+      function() lifetime$destroyed <- TRUE
+    )
+  }
+
+  lifetime
 }
 
 raw_keys <- function(x) {
@@ -313,7 +330,7 @@ new_cell <- function(x, value, label) {
   # Destroying a domain destroys the reactives created in it so far, but not
   # one created afterwards. Reading the destroyed keys raises shiny's error
   # rather than creating a cell that would outlive the collection.
-  if (.subset2(x, "state")$destroyed) {
+  if (.subset2(x, "lifetime")$destroyed) {
     raw_keys(x)
   }
 
