@@ -126,19 +126,28 @@ snapshot. Names, order and class carry over.
 
 \section{Dependencies}{
 
-Reading a slot makes the caller depend on that slot alone. The caller
-re-runs when the slot is bound, replaced or removed, but not when other
-slots change. This also holds for a slot that does not exist yet, so a
+Reading a slot by name makes the caller depend on that slot alone. The
+caller re-runs when the slot is bound, replaced or removed, but not when
+other slots change. This also holds for a slot that does not exist yet, so a
 reader re-runs once the slot is added. Subsetting with \code{[} by name depends
-on the named slots in the same way. Reading a slot by position, or
-subsetting by position, also depends on which slots exist and in what
-order, as reading \code{names()} or \code{length()} does. The \code{as.list()} method
-depends on that and on every slot, and \code{slot_values()} also on every slot's
-value. Copying, with \code{x[]} or \code{copy()}, has the same dependencies as
-\code{as.list()}. A deep copy reads the values it copies without depending on
-them, and it runs no computed slot. Reordering re-runs readers of
-\code{names()}, \code{length()}, \code{as.list()}, \code{slot_values()} and of slots by
-position, but not readers of slots by name.
+on the named slots in the same way.
+
+Reading a slot by position, as in \code{x[[1]]}, depends on the reactive at that
+position alone. The caller re-runs when the slot there is replaced or
+removed or another slot moves there, but not when a slot is renamed or when
+only slots after it change. Reading past the last slot fails, and the
+caller re-runs when the number of slots changes.
+
+The \code{length()} method depends on the number of slots alone, and \code{names()}
+on which slots exist, their names and their order. Subsetting by position
+depends on the selected slots and, since the subset carries their names, on
+what \code{names()} depends on. The \code{as.list()} method depends on that and on
+every slot, and \code{slot_values()} also on every slot's value. Copying, with
+\code{x[]} or \code{copy()}, has the same dependencies as \code{as.list()}. A deep copy
+reads the values it copies without depending on them, and it runs no
+computed slot. Reordering re-runs readers of \code{names()}, \code{as.list()},
+\code{slot_values()} and of subsets by position, and readers of a position that
+another slot moves into, but not readers of \code{length()} or of slots by name.
 
 Printing, \code{format()} and \code{str()} make the caller depend on nothing, and they
 never call a slot, so they run no computed slot. Taking a snapshot also
@@ -151,12 +160,15 @@ work as they would inside \code{\link[shiny:isolate]{shiny::isolate()}} rather t
 
 In \href{https://rstudio.github.io/reactlog/}{reactlog}, the dependency on slot
 \code{a} shows as \code{reactives$a}, or as \code{reactive_vals$a} in a \code{reactive_vals}
-collection, and the one on which slots exist and in what order as
-\code{names(reactives)}. Unnamed slots show as \code{reactives$...1}, \code{reactives$...2}
-and so on, numbered in the order they were added rather than by position,
-so a label survives reordering. A read of every slot at once, such as
-\code{as.list()}, shows a single dependency on \code{reactives[]} instead of one per
-slot. The entry for a slot only appears once the slot has been read.
+collection, the one on the slot at position 1 as \code{reactives[[1]]}, the one
+on which slots exist and in what order as \code{names(reactives)}, and the one on
+their number as \code{length(reactives)}. Unnamed slots selected with \code{[} show as
+\code{reactives$...1}, \code{reactives$...2} and so on, numbered in the order they
+were added rather than by position, so a label survives reordering. A read
+of every slot at once, such as \code{as.list()}, shows a single dependency on
+\code{reactives[]} instead of one per slot. The entry for a slot or a position
+only appears once it has been read, and the one for the number of slots
+once \code{length()} has been called.
 }
 
 \examples{

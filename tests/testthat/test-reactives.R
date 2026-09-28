@@ -635,7 +635,9 @@ test_that("a collection is destroyed along with its module", {
       session$destroy("child")
 
       expect_error(x$a, class = "shiny.destroyed.error")
+      expect_error(x[[1]], class = "shiny.destroyed.error")
       expect_error(names(x), class = "shiny.destroyed.error")
+      expect_error(length(x), class = "shiny.destroyed.error")
     }
   )
 })
@@ -792,9 +794,8 @@ test_that("reactlog labels each slot with the class and key", {
 
       isolate(
         {
-          x[[1]]
+          x[c(1, 3)]
           x$a
-          x[[3]]
           y$b
           as.list(x)
         }
@@ -815,6 +816,25 @@ test_that("reactlog labels each slot with the class and key", {
   )
 
   expect_false("reactives$...3" %in% labels)
+})
+
+test_that("reactlog labels a read by position and length() as such", {
+
+  labels <- reactlog_labels(
+    {
+      x <- reactives(a = reactiveVal(1), reactiveVal(2))
+
+      isolate(
+        {
+          x[[2]]
+          length(x)
+        }
+      )
+    }
+  )
+
+  expect_true(all(c("reactives[[2]]", "length(reactives)") %in% labels))
+  expect_false(any(c("reactives$a", "reactives$...1") %in% labels))
 })
 
 test_that("a key's cell is created when the key is first read", {
@@ -950,6 +970,126 @@ test_that("subsetting by position depends on the order and the slots", {
       session$flushReact()
 
       expect_identical(every$a, a)
+    }
+  )
+})
+
+test_that("a reader by position depends on the slot at that position alone", {
+
+  with_session(
+    {
+      x <- reactive_vals(a = 1, b = 2, c = 3)
+
+      runs <- 0
+      seen <- NULL
+      observe(
+        {
+          runs <<- runs + 1
+          seen <<- x[[1]]
+        }
+      )
+      session$flushReact()
+
+      names(x) <- c("p", "q", "r")
+      x$s <- reactiveVal(4)
+      x$q <- NULL
+      reorder(x, c("p", "s", "r"))
+      session$flushReact()
+
+      expect_identical(runs, 1)
+
+      reorder(x, c("r", "p", "s"))
+      session$flushReact()
+
+      expect_identical(runs, 2)
+      expect_identical(seen, x$r)
+    }
+  )
+})
+
+test_that("a reader by position re-runs when its slot is replaced or removed", {
+
+  with_session(
+    {
+      x <- reactive_vals(a = 1, b = 2)
+
+      seen <- NULL
+      observe(seen <<- x[[1]])
+      session$flushReact()
+
+      a <- reactiveVal(10)
+      x$a <- a
+      session$flushReact()
+
+      expect_identical(seen, a)
+
+      x$a <- NULL
+      session$flushReact()
+
+      expect_identical(seen, x$b)
+    }
+  )
+})
+
+test_that("a reader beyond the last slot re-runs once a slot arrives there", {
+
+  with_session(
+    {
+      x <- reactive_vals(a = 1)
+
+      seen <- "unset"
+      observe(
+        seen <<- tryCatch(x[[2]], reactives_out_of_bounds = function(e) NULL)
+      )
+      session$flushReact()
+
+      expect_null(seen)
+
+      u <- reactiveVal(2)
+      x[[2]] <- u
+      session$flushReact()
+
+      expect_identical(seen, u)
+
+      x[[2]] <- NULL
+      session$flushReact()
+
+      expect_null(seen)
+    }
+  )
+})
+
+test_that("length() re-runs when slots are added or removed, and only then", {
+
+  with_session(
+    {
+      x <- reactive_vals(a = 1, b = 2)
+
+      runs <- 0
+      observe(
+        {
+          runs <<- runs + 1
+          length(x)
+        }
+      )
+      session$flushReact()
+
+      names(x) <- c("p", "q")
+      reorder(x, c("q", "p"))
+      x$p <- reactiveVal(3)
+      session$flushReact()
+
+      expect_identical(runs, 1)
+
+      x$r <- reactiveVal(4)
+      session$flushReact()
+
+      expect_identical(runs, 2)
+
+      x$p <- NULL
+      session$flushReact()
+
+      expect_identical(runs, 3)
     }
   )
 })
