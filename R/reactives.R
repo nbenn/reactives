@@ -248,8 +248,10 @@ new_reactives <- function(class) {
 
   # The domain keeps its destroy callbacks until it ends, so the one flagging
   # this collection is unregistered once the collection is garbage collected.
+  # A finalizer can run in the middle of shiny changing that same registry, so
+  # the removal waits for the event loop.
   if (is.function(lifetime$unregister)) {
-    reg.finalizer(state, function(e) lifetime$unregister())
+    reg.finalizer(state, function(e) later::later(lifetime$unregister))
   }
 
   structure(
