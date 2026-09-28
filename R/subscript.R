@@ -2,14 +2,10 @@
 # truncated, a logical subscript only recycles from size 1, and out-of-range
 # negative positions are errors rather than ignored. Missing values are errors
 # too, since a collection can't hold a missing slot.
-subscript_positions <- function(i, n, names) {
+subscript_positions <- function(i, n) {
 
   if (is.null(i)) {
     return(integer())
-  }
-
-  if (is.factor(i)) {
-    i <- as.character(i)
   }
 
   if (anyNA(i)) {
@@ -22,10 +18,6 @@ subscript_positions <- function(i, n, names) {
 
   if (is.numeric(i)) {
     return(numeric_positions(i, n))
-  }
-
-  if (is.character(i)) {
-    return(name_positions(i, names))
   }
 
   abort(
@@ -81,21 +73,19 @@ numeric_positions <- function(i, n) {
   as.integer(i)
 }
 
-name_positions <- function(i, names) {
+is_name_subscript <- function(i) {
+  is.character(i) || is.factor(i)
+}
 
-  check_names(i)
+subscript_names <- function(i) {
 
-  pos <- match(i, names)
-  unknown <- i[is.na(pos)]
+  i <- as.character(i)
 
-  if (length(unknown)) {
-    abort(
-      paste0("Unknown slot names: ", paste(unknown, collapse = ", "), "."),
-      "reactives_unknown_name"
-    )
+  if (anyNA(i)) {
+    abort("A subscript can't contain missing values.", "reactives_bad_index")
   }
 
-  pos
+  check_names(i)
 }
 
 check_names <- function(i) {
@@ -108,24 +98,16 @@ check_names <- function(i) {
 }
 
 select_keys <- function(keys, i) {
-  keys[subscript_positions(i, length(keys), display_names(keys))]
+  keys[subscript_positions(i, length(keys))]
 }
 
 target_keys <- function(keys, i) {
 
-  if (is.factor(i)) {
-    i <- as.character(i)
+  if (is_name_subscript(i)) {
+    return(subscript_names(i))
   }
 
-  if (!is.character(i)) {
-    return(select_keys(keys, i))
-  }
-
-  if (anyNA(i)) {
-    abort("A subscript can't contain missing values.", "reactives_bad_index")
-  }
-
-  check_names(i)
+  select_keys(keys, i)
 }
 
 index2 <- function(i) {

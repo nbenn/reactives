@@ -64,10 +64,12 @@
 #' Reading a slot makes the caller depend on that slot alone. The caller
 #' re-runs when the slot is bound, replaced or removed, but not when other
 #' slots change. This also holds for a slot that does not exist yet, so a
-#' reader re-runs once the slot is added. Reading `names()` or `length()`
-#' depends on which slots exist and in what order, `as.list()` depends on that
-#' and on every slot, and `slot_values()` also on every slot's value.
-#' Reordering re-runs readers of `names()`, `length()`, `as.list()`,
+#' reader re-runs once the slot is added. Subsetting with `[` by name depends
+#' on the named slots in the same way. Reading a slot by position, or
+#' subsetting by position, also depends on which slots exist and in what
+#' order, as reading `names()` or `length()` does. The `as.list()` method
+#' depends on that and on every slot, and `slot_values()` also on every slot's
+#' value. Reordering re-runs readers of `names()`, `length()`, `as.list()`,
 #' `slot_values()` and of slots by position, but not readers of slots by name.
 #'
 #' Printing, `format()` and `str()` make the caller depend on nothing, and they
@@ -529,8 +531,39 @@ display_names <- function(keys) {
 #' @export
 `[.reactives` <- function(x, i) {
 
+  if (missing(i)) {
+    slots <- as.list(x)
+  } else if (is_name_subscript(i)) {
+    slots <- named_slots(x, subscript_names(i))
+  } else {
+    slots <- positioned_slots(x, i)
+  }
+
+  build_reactives(slots, class(x))
+}
+
+named_slots <- function(x, i) {
+
+  slots <- lapply(i, get_slot, x = x)
+
+  unknown <- vapply(slots, is.null, logical(1L)) | is_positional_key(i)
+
+  if (any(unknown)) {
+    abort(
+      paste0("Unknown slot names: ", paste(i[unknown], collapse = ", "), "."),
+      "reactives_unknown_name"
+    )
+  }
+
+  names(slots) <- i
+
+  slots
+}
+
+positioned_slots <- function(x, i) {
+
   keys <- raw_keys(x)
-  sel <- if (missing(i)) keys else select_keys(keys, i)
+  sel <- select_keys(keys, i)
 
   if (all(keys %in% sel)) {
     all_slots_cell(x)()
@@ -541,7 +574,7 @@ display_names <- function(keys) {
 
   names(slots) <- replace(sel, is_positional_key(sel), "")
 
-  build_reactives(slots, class(x))
+  slots
 }
 
 #' @export

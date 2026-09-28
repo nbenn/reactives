@@ -832,6 +832,60 @@ test_that("a key's cell is created when the key is first read", {
   expect_identical(reactlog_labels(isolate(y$a)), "reactives$a")
 })
 
+test_that("subsetting by name depends on the named slots alone", {
+
+  with_session(
+    {
+      x <- reactive_vals(a = 1, b = 2)
+
+      runs <- 0
+      observe(
+        {
+          runs <<- runs + 1
+          x["a"]
+        }
+      )
+      session$flushReact()
+
+      x$c <- reactiveVal(3)
+      x$b <- NULL
+      names(x) <- c("a", "d")
+      reorder(x, c("d", "a"))
+      session$flushReact()
+
+      expect_identical(runs, 1)
+
+      x$a <- reactiveVal(10)
+      session$flushReact()
+
+      expect_identical(runs, 2)
+    }
+  )
+})
+
+test_that("subsetting by a missing name re-runs once the slot is added", {
+
+  with_session(
+    {
+      x <- reactives()
+
+      seen <- "unset"
+      observe(
+        seen <<- tryCatch(x["a"], reactives_unknown_name = function(e) NULL)
+      )
+      session$flushReact()
+
+      expect_null(seen)
+
+      a <- reactiveVal(1)
+      x$a <- a
+      session$flushReact()
+
+      expect_identical(seen$a, a)
+    }
+  )
+})
+
 test_that("subsetting by position depends on the order and the slots", {
 
   with_session(

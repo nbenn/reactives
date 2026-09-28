@@ -110,10 +110,12 @@ snapshot. Names, order and class carry over.
 Reading a slot makes the caller depend on that slot alone. The caller
 re-runs when the slot is bound, replaced or removed, but not when other
 slots change. This also holds for a slot that does not exist yet, so a
-reader re-runs once the slot is added. Reading \code{names()} or \code{length()}
-depends on which slots exist and in what order, \code{as.list()} depends on that
-and on every slot, and \code{slot_values()} also on every slot's value.
-Reordering re-runs readers of \code{names()}, \code{length()}, \code{as.list()},
+reader re-runs once the slot is added. Subsetting with \code{[} by name depends
+on the named slots in the same way. Reading a slot by position, or
+subsetting by position, also depends on which slots exist and in what
+order, as reading \code{names()} or \code{length()} does. The \code{as.list()} method
+depends on that and on every slot, and \code{slot_values()} also on every slot's
+value. Reordering re-runs readers of \code{names()}, \code{length()}, \code{as.list()},
 \code{slot_values()} and of slots by position, but not readers of slots by name.
 
 Printing, \code{format()} and \code{str()} make the caller depend on nothing, and they
