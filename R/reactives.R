@@ -191,7 +191,7 @@ reactive_vals <- function(...) {
 #' @export
 reorder.reactives <- function(x, order, ...) {
 
-  keys <- isolate(raw_keys(x))
+  keys <- live_keys(x)
   new_keys <- if (is.numeric(order)) keys[order] else as.character(order)
 
   valid <- length(new_keys) == length(keys) && !anyNA(new_keys) &&
@@ -286,8 +286,8 @@ build_reactives <- function(slots, class) {
 }
 
 # The slots live in a plain environment, and an ordered `keys` `reactiveVal()`
-# records which slots exist, with a plain copy in `state` for finding the slot
-# at a position without subscribing. Reading a key subscribes to a
+# records which slots exist, with a plain copy in `state` for methods that
+# read the keys without subscribing. Reading a key subscribes to a
 # `reactiveVal()` cell for that key alone and then takes the slot from the
 # environment. Rather than the slot, which a `reactiveVal()` created with it
 # would keep alive for as long as it exists, the cell holds a count: each change
@@ -334,6 +334,11 @@ raw_keys <- function(x) {
 
 peek_keys <- function(x) {
   .subset2(x, "state")$keys
+}
+
+live_keys <- function(x) {
+  check_lifetime(x)
+  peek_keys(x)
 }
 
 set_keys <- function(x, keys) {
@@ -527,9 +532,8 @@ check_lifetime <- function(x) {
 bind_slot <- function(x, key, value) {
 
   check_slot(x, value)
-  check_lifetime(x)
 
-  keys <- peek_keys(x)
+  keys <- live_keys(x)
   at <- match(key, keys)
 
   write_slot(x, key, value)
@@ -546,7 +550,7 @@ bind_slot <- function(x, key, value) {
 
 remove_slot <- function(x, key) {
 
-  keys <- isolate(raw_keys(x))
+  keys <- live_keys(x)
 
   if (key %in% keys) {
     write_slot(x, key, NULL)
@@ -678,8 +682,7 @@ display_names <- function(keys) {
     return(assign_slot(x, i, value))
   }
 
-  check_lifetime(x)
-  keys <- peek_keys(x)
+  keys <- live_keys(x)
 
   if (i == length(keys) + 1L) {
 
@@ -749,7 +752,7 @@ positioned_slots <- function(x, i) {
 #' @export
 `[<-.reactives` <- function(x, i, value) {
 
-  keys <- isolate(raw_keys(x))
+  keys <- live_keys(x)
   targets <- if (missing(i)) keys else target_keys(keys, i)
   values <- recycle_values(value, length(targets))
 
@@ -789,7 +792,7 @@ names.reactives <- function(x) {
 #' @export
 `names<-.reactives` <- function(x, value) {
 
-  keys <- isolate(raw_keys(x))
+  keys <- live_keys(x)
 
   if (is.null(value)) {
     value <- character(length(keys))
@@ -863,7 +866,7 @@ as.list.reactives <- function(x, ...) {
 #' @export
 format.reactives <- function(x, ...) {
 
-  keys <- isolate(raw_keys(x))
+  keys <- live_keys(x)
 
   labels <- ifelse(
     is_positional_key(keys),
@@ -890,7 +893,7 @@ print.reactives <- function(x, ...) {
 # nolint next: object_name_linter.
 str.reactives <- function(object, ..., indent.str = " ") {
 
-  keys <- isolate(raw_keys(object))
+  keys <- live_keys(object)
   slots <- peek_slots(object, keys)
 
   cat(format_header(object, length(keys)), "\n", sep = "")

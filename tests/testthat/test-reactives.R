@@ -712,6 +712,27 @@ test_that("binding a slot of a destroyed collection fails", {
   )
 })
 
+test_that("printing or changing a destroyed collection fails", {
+
+  with_session(
+    {
+      x <- moduleServer("child", function(input, output, session) reactives())
+      x$a <- reactiveVal(1)
+      session$destroy("child")
+
+      expect_error(x$a <- NULL, class = "shiny.destroyed.error")
+      expect_error(x$b <- NULL, class = "shiny.destroyed.error")
+      expect_error(x["a"] <- NULL, class = "shiny.destroyed.error")
+      expect_error(names(x) <- "b", class = "shiny.destroyed.error")
+      expect_error(reorder(x, "a"), class = "shiny.destroyed.error")
+
+      expect_error(format(x), class = "shiny.destroyed.error")
+      expect_error(print(x), class = "shiny.destroyed.error")
+      expect_error(str(x), class = "shiny.destroyed.error")
+    }
+  )
+})
+
 test_that("[<- binds and removes several slots by name", {
 
   with_session(
