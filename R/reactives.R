@@ -192,7 +192,7 @@ reactive_vals <- function(...) {
 reorder.reactives <- function(x, order, ...) {
 
   keys <- isolate(raw_keys(x))
-  new_keys <- if (is.numeric(order)) keys[order] else order
+  new_keys <- if (is.numeric(order)) keys[order] else as.character(order)
 
   valid <- length(new_keys) == length(keys) && !anyNA(new_keys) &&
     setequal(new_keys, keys) && !anyDuplicated(new_keys)

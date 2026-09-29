@@ -503,6 +503,36 @@ test_that("reorder() takes positions, or names when all are named", {
   )
 })
 
+test_that("reorder() ignores the names and factor class of the order", {
+
+  with_session(
+    {
+      x <- reactive_vals(a = 1, b = 2)
+
+      runs <- 0
+      observe(
+        {
+          runs <<- runs + 1
+          names(x)
+        }
+      )
+      session$flushReact()
+
+      reorder(x, c(p = "a", q = "b"))
+      session$flushReact()
+
+      expect_identical(runs, 1)
+
+      reorder(x, c(p = "b", q = "a"))
+      expect_identical(names(x), c("b", "a"))
+
+      reorder(x, factor(c("a", "b")))
+      expect_identical(names(x), c("a", "b"))
+      expect_identical(slot_values(x), list(a = 1, b = 2))
+    }
+  )
+})
+
 test_that("[ returns a new collection holding the same reactives", {
 
   with_session(
