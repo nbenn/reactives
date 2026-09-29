@@ -79,22 +79,26 @@
 #' reader re-runs once the slot is added. Subsetting with `[` by name depends
 #' on the named slots in the same way.
 #'
-#' Reading a slot by position, as in `x[[1]]`, depends on the reactive at that
-#' position alone. The caller re-runs when the slot there is replaced or
-#' removed or another slot moves there, but not when a slot is renamed or when
-#' only slots after it change. Reading past the last slot fails, and the
-#' caller re-runs when the number of slots changes.
-#'
 #' The `length()` method depends on the number of slots alone, and `names()`
-#' on which slots exist, their names and their order. Subsetting by position
-#' depends on the selected slots and, since the subset carries their names, on
-#' what `names()` depends on. The `as.list()` method depends on that and on
-#' every slot, and `slot_values()` also on every slot's value. Copying, with
+#' on which slots exist, their names and their order. Reading a slot by
+#' position, as in `x[[1]]`, depends on what `names()` depends on and on the
+#' slot it finds, so the caller re-runs whenever a slot is added, removed,
+#' renamed or moved, even if the slot at its position stays the same. Reading
+#' past the last slot fails, and the caller re-runs on the same changes.
+#' Subsetting by position depends on the selected slots and on what `names()`
+#' depends on. The `as.list()` method depends on what `names()` depends on and
+#' on every slot, and `slot_values()` also on every slot's value. Copying, with
 #' `x[]` or `copy()`, has the same dependencies as `as.list()`. A deep copy
 #' reads the values it copies without depending on them, and it runs no
 #' computed slot. Reordering re-runs readers of `names()`, `as.list()`,
-#' `slot_values()` and of subsets by position, and readers of a position that
-#' another slot moves into, but not readers of `length()` or of slots by name.
+#' `slot_values()` and of slots and subsets by position, but not readers of
+#' `length()` or of slots by name.
+#'
+#' To depend on the slot at a position alone, read it through a
+#' [shiny::reactiveVal()]: after `first <- reactiveVal()` and
+#' `observe(first(x[[1]]))`, a reader of `first()` re-runs only when position 1
+#' holds a different reactive, since writing a [shiny::reactiveVal()] the value
+#' it already holds invalidates nothing.
 #'
 #' Printing, `format()` and `str()` make the caller depend on nothing, and they
 #' never call a slot, so they run no computed slot. Taking a snapshot also
@@ -105,15 +109,14 @@
 #' @section Reactlog:
 #' In [reactlog](https://rstudio.github.io/reactlog/), the dependency on slot
 #' `a` shows as `reactives$a`, or as `reactive_vals$a` in a `reactive_vals`
-#' collection, the one on the slot at position 1 as `reactives[[1]]`, the one
-#' on which slots exist and in what order as `names(reactives)`, and the one on
-#' their number as `length(reactives)`. Unnamed slots selected with `[` show as
-#' `reactives$...1`, `reactives$...2` and so on, numbered in the order they
-#' were added rather than by position, so a label survives reordering. A read
-#' of every slot at once, such as `as.list()`, shows a single dependency on
-#' `reactives[]` instead of one per slot. The entry for a slot or a position
-#' only appears once it has been read, and the one for the number of slots
-#' once `length()` has been called.
+#' collection, the one on which slots exist and in what order as
+#' `names(reactives)`, and the one on their number as `length(reactives)`.
+#' Unnamed slots show as `reactives$...1`, `reactives$...2` and so on, numbered
+#' in the order they were added rather than by position, so a label survives
+#' reordering. A read of every slot at once, such as `as.list()`, shows a
+#' single dependency on `reactives[]` instead of one per slot. The entry for a
+#' slot only appears once it has been read, and the one for the number of
+#' slots once `length()` has been called.
 #'
 #' @param ... For `reactives()` and `reactive_vals()`, the slots to hold, named
 #'   or unnamed: reactives, with `NULL` entries dropped, for `reactives()`, and
@@ -292,11 +295,10 @@ build_reactives <- function(slots, class) {
 # environment. Rather than the slot, which a `reactiveVal()` created with it
 # would keep alive for as long as it exists, the cell holds a count: each change
 # of a slot adds one to the collection's count of changes and writes the new
-# count to the key's cell, so the cell changes whenever the slot does. Reading a
-# position subscribes to a cell holding the reactive at that position, which
-# renaming leaves as it is, `length()` to one holding the number of slots, and a
-# read of every slot to one for the whole collection. Creating a cell costs far
-# more than storing a slot, so cells are created on first read, and changing a
+# count to the key's cell, so the cell changes whenever the slot does. Calling
+# `length()` subscribes to a cell holding the number of slots, and a read of
+# every slot to one for the whole collection. Creating a cell costs far more
+# than storing a slot, so cells are created on first read, and changing a
 # collection writes only the cells that exist. Removing a slot writes its key's
 # cell as any change does and then deletes the cell, which by then has no
 # subscribers: the write invalidated every reader. A reader that reads the key
@@ -309,7 +311,6 @@ new_reactives <- function(class) {
 
   state <- new.env(parent = emptyenv())
   state$keys <- character()
-  state$position_cells <- list()
   state$positions <- 0L
   state$changes <- 0L
 
@@ -344,32 +345,12 @@ live_keys <- function(x) {
 set_keys <- function(x, keys) {
 
   state <- .subset2(x, "state")
-  old <- state$keys
 
   .subset2(x, "keys")(keys)
   state$keys <- keys
 
   if (!is.null(state$count)) {
     state$count(length(keys))
-  }
-
-  positions <- seq_len(max(length(old), length(keys)))
-  same <- old[positions] == keys[positions]
-
-  refresh_positions(x, which(is.na(same) | !same))
-}
-
-# Only a position whose key changed, or whose slot was replaced, can hold a new
-# reactive. Writing a cell the reactive it already holds, as after a rename,
-# invalidates nothing.
-refresh_positions <- function(x, positions) {
-
-  cells <- .subset2(x, "state")$position_cells
-
-  for (i in positions[positions <= length(cells)]) {
-    if (!is.null(cells[[i]])) {
-      cells[[i]](slot_at(x, i))
-    }
   }
 }
 
@@ -402,26 +383,6 @@ all_slots_cell <- function(x) {
     .subset2(x, "state")$changes,
     paste0(class(x)[[1L]], "[]")
   )
-}
-
-position_cell <- function(x, i) {
-
-  state <- .subset2(x, "state")
-  cells <- state$position_cells
-  cell <- if (i <= length(cells)) cells[[i]]
-
-  if (is.null(cell)) {
-
-    # A `reactiveVal()` holds on to its initial value for as long as it exists,
-    # so a position cell starts empty and is set afterwards. Starting it at the
-    # slot would keep that slot alive once it is replaced.
-    cell <- new_cell(x, NULL, sprintf("%s[[%d]]", class(x)[[1L]], i))
-    cell(slot_at(x, i))
-
-    state$position_cells[[i]] <- cell
-  }
-
-  cell
 }
 
 count_cell <- function(x) {
@@ -475,15 +436,6 @@ peek_slots <- function(x, keys) {
   mget(keys, envir = .subset2(x, "slots"))
 }
 
-slot_at <- function(x, i) {
-
-  keys <- peek_keys(x)
-
-  if (i <= length(keys)) {
-    .subset2(x, "slots")[[keys[[i]]]]
-  }
-}
-
 check_slot <- function(x, value) {
 
   if (!is.reactive(value)) {
@@ -534,15 +486,12 @@ bind_slot <- function(x, key, value) {
   check_slot(x, value)
 
   keys <- live_keys(x)
-  at <- match(key, keys)
 
   write_slot(x, key, value)
   refresh_all_slots(x)
 
-  if (is.na(at)) {
+  if (!key %in% keys) {
     set_keys(x, c(keys, key))
-  } else {
-    refresh_positions(x, at)
   }
 
   invisible(x)
@@ -661,11 +610,13 @@ display_names <- function(keys) {
     return(get_slot(x, i))
   }
 
-  if (i > length(peek_keys(x))) {
-    out_of_bounds(i, length(x))
+  keys <- raw_keys(x)
+
+  if (i > length(keys)) {
+    out_of_bounds(i, length(keys))
   }
 
-  position_cell(x, i)()
+  get_slot(x, keys[[i]])
 }
 
 #' @export
@@ -776,10 +727,6 @@ positioned_slots <- function(x, i) {
 
   refresh_all_slots(x)
   set_keys(x, keys)
-
-  # Rebinding a slot in place leaves its key where it was, so `set_keys()`
-  # doesn't refresh its position.
-  refresh_positions(x, which(keys %in% targets))
 
   x
 }
