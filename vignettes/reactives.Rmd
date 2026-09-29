@@ -1,0 +1,233 @@
+---
+title: "Get started with reactives"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Get started with reactives}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
+```
+
+An app often holds a set of reactives that changes while it runs, such as one for each module the user adds. The set needs keys, so that one of its reactives can be read, replaced or removed without disturbing the others. The shiny package offers `reactiveValues()` for keyed stored values, but it can neither remove nor reorder keys, and it has no keyed collection of computed values. A `reactives` collection holds reactives of both kinds in slots that can be added, removed, renamed and reordered, and it tracks each slot as a dependency of its own.
+
+At the console, reading a reactive fails unless the read is wrapped in `isolate()`. The examples below turn on shiny's reactive console, which lifts that requirement, so that they read as they would inside an app:
+
+```{r setup}
+library(shiny)
+library(reactives)
+
+reactiveConsole(TRUE)
+```
+
+## Slots hold reactives
+
+A collection holds reactives, such as a `reactiveVal()` for a stored value or a `reactive()` for a computed one, each in a slot of its own. Reading a slot returns its reactive, and calling that returns the value:
+
+```{r}
+a <- reactiveVal(1)
+x <- reactives(a = a, b = reactive(2 * 21))
+
+identical(x$a, a)
+x$a()
+x[["b"]]()
+```
+
+Assigning a reactive to a slot binds it, adding the slot or replacing its reactive, and assigning `NULL` removes the slot, as for a list:
+
+```{r}
+x$c <- reactiveVal("new")
+x$b <- NULL
+names(x)
+```
+
+Assigning any other value is an error, so that a stray value can't overwrite a computed slot:
+
+```{r, error = TRUE}
+x$a <- 10
+```
+
+A new value is written through the slot's `reactiveVal()` instead:
+
+```{r}
+x$a(10)
+x$a()
+```
+
+A slot that doesn't exist reads as `NULL`, again as on a list. Since a slot holds a reactive rather than a value, that is not the same as a slot whose `reactiveVal()` holds `NULL`:
+
+```{r}
+x$d <- reactiveVal(NULL)
+is.null(x$d)
+is.null(x$d())
+is.null(x$e)
+```
+
+For a collection of stored values, `reactive_vals()` wraps each value it is given in a `reactiveVal()`. Such a collection only ever holds `reactiveVal()` slots, so code writing through its slots can rely on them being writable. The `slot_values()` function returns the value of every slot, as `reactiveValuesToList()` does for `reactiveValues()`:
+
+```{r}
+y <- reactive_vals(count = 1, label = "one")
+slot_values(y)
+```
+
+## A collection is shared
+
+A collection is shared, as a `reactiveValues()` object is: after `z <- y`, both names refer to the same collection, and a change made through either is seen by everything holding it. That is what lets one part of an app change a collection while another part reacts to it. It is also why `reorder()` changes the collection it is given, rather than returning a reordered copy:
+
+```{r}
+z <- y
+reorder(z, c("label", "count"))
+names(y)
+```
+
+Subsetting with `[` returns a new collection, whose slots can be bound or removed without touching the original. Its slots hold the same reactives, though, so writing through one of them writes to the original as well. A deep copy, made with `copy(y, deep = TRUE)`, gives each `reactiveVal()` slot a new `reactiveVal()` holding the slot's current value:
+
+```{r}
+shallow <- y["count"]
+shallow$count(2)
+y$count()
+
+deep <- copy(y, deep = TRUE)
+deep$count(3)
+y$count()
+```
+
+## Each slot is a dependency of its own
+
+Reading a slot makes the reader depend on that slot alone: the reader re-runs when the slot is bound, replaced or removed, but not when another slot changes. A reader that calls the slot's reactive also depends on its value, as it would on any reactive. A `reactive()` that reports each computation shows this, since it only recomputes once something it read has changed:
+
+```{r}
+x <- reactive_vals(a = 1, b = 2)
+
+a_doubled <- reactive(
+  {
+    message("Computing a_doubled")
+    2 * x$a()
+  }
+)
+
+a_doubled()
+
+x$b(3)
+x$c <- reactiveVal(4)
+reorder(x, c("c", "b", "a"))
+a_doubled()
+
+x$a(5)
+a_doubled()
+```
+
+A reader of a slot that doesn't exist yet gets `NULL`, and it re-runs once the slot is added. Once a slot is removed, its readers re-run and get `NULL` in turn, and calling that fails. A reader that expects the slot to go can stop quietly instead, with `req(x$a)()`.
+
+Other reads depend on what they return. The `length()` method depends on the number of slots alone, `names()` on which slots exist, their names and their order, and `slot_values()` on all of that and on every slot and its value. A reader that lists the slots, for example to offer them as choices, re-runs when a slot is added, removed, renamed or moved, but not when a value changes:
+
+```{r}
+slot_names <- reactive(
+  {
+    message("Reading the names")
+    names(x)
+  }
+)
+
+slot_names()
+
+x$a(6)
+slot_names()
+
+x$b <- NULL
+slot_names()
+```
+
+See the Dependencies section of `?reactives` for reads by position, subsets and copies.
+
+## In an app
+
+The app below lets the user add terms and remove them again, and it shows their total. Each term is a module, and each module binds a reactive returning its term's value to the collection that the app passes it. Since a collection is shared, the app sees every slot a module binds or removes.
+
+```{r}
+term_ui <- function(id) {
+
+  ns <- NS(id)
+
+  div(
+    id = ns("term"),
+    numericInput(ns("value"), id, value = 1),
+    actionButton(ns("remove"), "Remove")
+  )
+}
+
+term_server <- function(id, terms) {
+  moduleServer(
+    id,
+    function(input, output, session) {
+
+      terms[[id]] <- reactive(input$value)
+      session$onDestroy(function() terms[[id]] <- NULL)
+
+      observeEvent(
+        input$remove,
+        {
+          removeUI(paste0("#", session$ns("term")))
+          session$destroy()
+        }
+      )
+    }
+  )
+}
+
+ui <- fluidPage(
+  actionButton("add", "Add a term"),
+  div(id = "terms"),
+  textOutput("total")
+)
+
+server <- function(input, output, session) {
+
+  terms <- reactives()
+
+  observeEvent(
+    input$add,
+    {
+      id <- paste0("term_", input$add)
+      insertUI("#terms", ui = term_ui(id))
+      term_server(id, terms)
+    }
+  )
+
+  output$total <- renderText(
+    paste("Total:", sum(unlist(slot_values(terms))))
+  )
+}
+```
+
+```{r, eval = FALSE}
+shinyApp(ui, server)
+```
+
+The total reads every slot's value, so it re-runs whenever a term is added, removed or changed, while a reader of `names(terms)` would re-run only when a term is added or removed.
+
+A collection belongs to the session or module it was created in, here the app's session, and is destroyed along with it. Changing it from a module doesn't tie it to that module. A reactive bound to a slot, however, belongs to the module that created it and is destroyed with that module, after which calling it fails. That is why each module removes its slot in `session$onDestroy()`, which runs however the module is destroyed, so that no reader of the collection calls a destroyed reactive.
+
+## Testing
+
+Inside `testServer()`, the test code sees the server's collection and outputs, so an app like the one above can be checked without a browser. The collection belongs to the session that `testServer()` creates, though, and can't be read once the test is over. To check it afterwards, take a snapshot with `snapshot_reactives()` while the session is still open. A snapshot belongs to no session, and each of its slots returns the value the original slot had when the snapshot was taken:
+
+```{r}
+snap <- NULL
+
+testServer(
+  server,
+  {
+    session$setInputs(add = 1)
+    session$setInputs(add = 2)
+    session$setInputs(`term_1-value` = 3, `term_2-value` = 4)
+    session$setInputs(`term_1-remove` = 1)
+    print(output$total)
+    snap <<- snapshot_reactives(terms)
+  }
+)
+
+slot_values(snap)
+```
