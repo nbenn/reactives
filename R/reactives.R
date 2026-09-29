@@ -313,17 +313,6 @@ new_reactives <- function(class) {
   state$positions <- 0L
   state$changes <- 0L
 
-  domain <- getDefaultReactiveDomain()
-  lifetime <- watch_domain(domain)
-
-  # The domain keeps its destroy callbacks until it ends, so the one flagging
-  # this collection is unregistered once the collection is garbage collected.
-  # A finalizer can run in the middle of shiny changing that same registry, so
-  # the removal waits for the event loop.
-  if (is.function(lifetime$unregister)) {
-    reg.finalizer(state, function(e) later::later(lifetime$unregister))
-  }
-
   structure(
     list(
       slots = new.env(parent = emptyenv()),
@@ -332,26 +321,11 @@ new_reactives <- function(class) {
         character(),
         label = paste0("names(", class[[1L]], ")")
       ),
-      domain = domain,
-      state = state,
-      lifetime = lifetime
+      domain = getDefaultReactiveDomain(),
+      state = state
     ),
     class = class
   )
-}
-
-watch_domain <- function(domain) {
-
-  lifetime <- new.env(parent = emptyenv())
-  lifetime$destroyed <- FALSE
-
-  if (is.function(domain$onDestroy)) {
-    lifetime$unregister <- domain$onDestroy(
-      function() lifetime$destroyed <- TRUE
-    )
-  }
-
-  lifetime
 }
 
 raw_keys <- function(x) {
@@ -540,13 +514,13 @@ check_collection <- function(x) {
   invisible(x)
 }
 
-# Reading the destroyed `keys` raises shiny's error.
+# Shiny offers no way to ask whether a module was destroyed, but `keys` is
+# destroyed along with the collection, and writing to a destroyed
+# `reactiveVal()` raises shiny's error. On a live collection, writing back the
+# value `keys` holds invalidates nothing and, unlike a read, subscribes no
+# caller.
 check_lifetime <- function(x) {
-
-  if (.subset2(x, "lifetime")$destroyed) {
-    raw_keys(x)
-  }
-
+  .subset2(x, "keys")(peek_keys(x))
   invisible(x)
 }
 
