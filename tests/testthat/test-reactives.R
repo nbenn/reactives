@@ -930,7 +930,7 @@ test_that("reactlog labels each slot with the class and key", {
   expect_false("reactives$...3" %in% labels)
 })
 
-test_that("reactlog labels a read by position and length() as such", {
+test_that("reactlog labels a read by position with its key, and length() too", {
 
   labels <- reactlog_labels(
     {
@@ -945,8 +945,8 @@ test_that("reactlog labels a read by position and length() as such", {
     }
   )
 
-  expect_true(all(c("reactives[[2]]", "length(reactives)") %in% labels))
-  expect_false(any(c("reactives$a", "reactives$...1") %in% labels))
+  expect_true(all(c("reactives$...1", "length(reactives)") %in% labels))
+  expect_false("reactives$a" %in% labels)
 })
 
 test_that("a key's cell is created when the key is first read", {
@@ -1132,35 +1132,20 @@ test_that("subsetting by position depends on the order and the slots", {
   )
 })
 
-test_that("a reader by position depends on the slot at that position alone", {
+test_that("a reader by position re-runs when another slot moves there", {
 
   with_session(
     {
       x <- reactive_vals(a = 1, b = 2, c = 3)
 
-      runs <- 0
       seen <- NULL
-      observe(
-        {
-          runs <<- runs + 1
-          seen <<- x[[1]]
-        }
-      )
+      observe(seen <<- x[[1]])
       session$flushReact()
 
-      names(x) <- c("p", "q", "r")
-      x$s <- reactiveVal(4)
-      x$q <- NULL
-      reorder(x, c("p", "s", "r"))
+      reorder(x, c("c", "a", "b"))
       session$flushReact()
 
-      expect_identical(runs, 1)
-
-      reorder(x, c("r", "p", "s"))
-      session$flushReact()
-
-      expect_identical(runs, 2)
-      expect_identical(seen, x$r)
+      expect_identical(seen, x$c)
     }
   )
 })

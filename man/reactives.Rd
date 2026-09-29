@@ -58,12 +58,12 @@ of either kind, use \code{is_reactives()}.
 }
 \details{
 Reading a slot, with \code{x$a}, \code{x[["a"]]} or \code{x[[1]]}, returns the slot's
-reactive, or \code{NULL} if there is no such slot, as \code{$} does on a list. Call
-the result to get its value, as in \code{x$a()}, or get the value of every slot
-at once with \code{slot_values()}, as \code{\link[shiny:reactiveValuesToList]{shiny::reactiveValuesToList()}} does for a
-\code{\link[shiny:reactiveValues]{shiny::reactiveValues()}} object. Because a slot holds a reactive rather
-than a value, a slot whose \code{\link[shiny:reactiveVal]{shiny::reactiveVal()}} stores \code{NULL} is distinct
-from a missing slot.
+reactive. As on a list, a name with no slot reads as \code{NULL}, while a
+position past the last slot is an error. Call the result to get its value,
+as in \code{x$a()}, or get the value of every slot at once with \code{slot_values()},
+as \code{\link[shiny:reactiveValuesToList]{shiny::reactiveValuesToList()}} does for a \code{\link[shiny:reactiveValues]{shiny::reactiveValues()}}
+object. Because a slot holds a reactive rather than a value, a slot whose
+\code{\link[shiny:reactiveVal]{shiny::reactiveVal()}} stores \code{NULL} is distinct from a missing slot.
 
 Assigning a reactive to a slot binds it, and assigning \code{NULL} removes the
 slot, again as for a list. Assigning anything else is an error: a value is
@@ -132,22 +132,28 @@ other slots change. This also holds for a slot that does not exist yet, so a
 reader re-runs once the slot is added. Subsetting with \code{[} by name depends
 on the named slots in the same way.
 
-Reading a slot by position, as in \code{x[[1]]}, depends on the reactive at that
-position alone. The caller re-runs when the slot there is replaced or
-removed or another slot moves there, but not when a slot is renamed or when
-only slots after it change. Reading past the last slot fails, and the
-caller re-runs when the number of slots changes.
-
 The \code{length()} method depends on the number of slots alone, and \code{names()}
-on which slots exist, their names and their order. Subsetting by position
-depends on the selected slots and, since the subset carries their names, on
-what \code{names()} depends on. The \code{as.list()} method depends on that and on
-every slot, and \code{slot_values()} also on every slot's value. Copying, with
+on which slots exist, their names and their order. Reading a slot by
+position, as in \code{x[[1]]}, depends on what \code{names()} depends on and on the
+slot it finds, so the caller re-runs whenever a slot is added, removed,
+renamed or moved, even if the slot at its position stays the same. Reading
+past the last slot fails, and the caller re-runs on the same changes.
+Subsetting by position depends on the selected slots and on what \code{names()}
+depends on. The \code{as.list()} method depends on what \code{names()} depends on and
+on every slot, and \code{slot_values()} also on every slot's value. Copying, with
 \code{x[]} or \code{copy()}, has the same dependencies as \code{as.list()}. A deep copy
 reads the values it copies without depending on them, and it runs no
 computed slot. Reordering re-runs readers of \code{names()}, \code{as.list()},
-\code{slot_values()} and of subsets by position, and readers of a position that
-another slot moves into, but not readers of \code{length()} or of slots by name.
+\code{slot_values()} and of slots and subsets by position, but not readers of
+\code{length()} or of slots by name.
+
+To depend on the slot at a position alone, read it through a
+\code{\link[shiny:reactiveVal]{shiny::reactiveVal()}}. After \code{first <- reactiveVal()} and
+\code{observe(first(if (length(x)) x[[1]]))}, a reader of \code{first()} re-runs only
+when position 1 comes to hold a different reactive or none, since writing a
+\code{\link[shiny:reactiveVal]{shiny::reactiveVal()}} the value it already holds invalidates nothing. The
+check on \code{length()} keeps the observer from failing on an empty collection,
+which in an app would end the session.
 
 Printing, \code{format()} and \code{str()} make the caller depend on nothing, and they
 never call a slot, so they run no computed slot. Taking a snapshot also
@@ -160,15 +166,14 @@ work as they would inside \code{\link[shiny:isolate]{shiny::isolate()}} rather t
 
 In \href{https://rstudio.github.io/reactlog/}{reactlog}, the dependency on slot
 \code{a} shows as \code{reactives$a}, or as \code{reactive_vals$a} in a \code{reactive_vals}
-collection, the one on the slot at position 1 as \code{reactives[[1]]}, the one
-on which slots exist and in what order as \code{names(reactives)}, and the one on
-their number as \code{length(reactives)}. Unnamed slots selected with \code{[} show as
-\code{reactives$...1}, \code{reactives$...2} and so on, numbered in the order they
-were added rather than by position, so a label survives reordering. A read
-of every slot at once, such as \code{as.list()}, shows a single dependency on
-\code{reactives[]} instead of one per slot. The entry for a slot or a position
-only appears once it has been read, and the one for the number of slots
-once \code{length()} has been called.
+collection, the one on which slots exist and in what order as
+\code{names(reactives)}, and the one on their number as \code{length(reactives)}.
+Unnamed slots show as \code{reactives$...1}, \code{reactives$...2} and so on, numbered
+in the order they were added rather than by position, so a label survives
+reordering. A read of every slot at once, such as \code{as.list()}, shows a
+single dependency on \code{reactives[]} instead of one per slot. The entry for a
+slot only appears once it has been read, and the one for the number of
+slots once \code{length()} has been called.
 }
 
 \examples{
