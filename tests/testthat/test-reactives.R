@@ -293,6 +293,30 @@ test_that("as.list() returns the slots and re-runs on any change", {
   )
 })
 
+test_that("a call that changes no slot re-runs no reader of every slot", {
+
+  with_session(
+    {
+      x <- reactive_vals(a = 1, b = 2)
+
+      runs <- 0
+      observe(
+        {
+          runs <<- runs + 1
+          as.list(x)
+        }
+      )
+      session$flushReact()
+
+      x$a <- x$a
+      x[] <- as.list(x)
+      session$flushReact()
+
+      expect_identical(runs, 1)
+    }
+  )
+})
+
 test_that("slot_values() returns the value of every slot, in slot order", {
 
   with_session(
@@ -901,6 +925,27 @@ test_that("a key's cell is deleted once its slot is removed", {
     reactlog_labels(isolate(list(x$a, x$b))),
     c("reactives$a", "reactives$b")
   )
+})
+
+test_that("a call writes reactives[] as often for one slot as for several", {
+
+  writes <- function(n) {
+
+    log <- reactlog_writes(
+      {
+        x <- do.call(reactives, lapply(seq_len(n), reactiveVal))
+        isolate(as.list(x))
+
+        x[] <- lapply(seq_len(n), reactiveVal)
+        names(x) <- paste0("s", seq_len(n))
+        x[] <- NULL
+      }
+    )
+
+    sum(log == "reactives[]")
+  }
+
+  expect_identical(writes(3L), writes(1L))
 })
 
 test_that("replacing a slot releases its old reactive", {
