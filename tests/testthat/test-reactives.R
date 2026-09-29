@@ -957,6 +957,16 @@ test_that("a key's cell is deleted once its slot is removed", {
   )
 })
 
+test_that("the first read of a key, length() or every slot writes no cell", {
+
+  x <- reactives(a = reactiveVal(1))
+
+  expect_identical(
+    reactlog_writes(isolate(list(x$a, x$b, length(x), as.list(x)))),
+    character()
+  )
+})
+
 test_that("a call writes reactives[] as often for one slot as for several", {
 
   writes <- function(n) {
@@ -992,6 +1002,7 @@ test_that("replacing a slot releases its old reactive", {
       rm(tracked)
 
       x$a
+      x[[1]]
       x$a <- reactiveVal(2)
       gc()
 

@@ -288,20 +288,23 @@ build_reactives <- function(slots, class) {
 # The slots live in a plain environment, and an ordered `keys` `reactiveVal()`
 # records which slots exist, with a plain copy in `state` for finding the slot
 # at a position without subscribing. Reading a key subscribes to a
-# `reactiveVal()` cell for that key alone, holding the slot's reactive or
-# `NULL` when the key has no slot. Reading a position subscribes to a cell
-# holding the reactive at that position, which renaming leaves as it is,
-# `length()` to one holding the number of slots, and a read of every slot to
-# one for the whole collection. Creating a cell costs far more than storing a
-# slot, so cells are created on first read, and changing a collection writes
-# only the cells that exist. Removing a slot writes `NULL` to its key's cell
-# and then deletes the cell, which by then has no subscribers: the write
-# invalidated every reader. A reader that reads the key again creates a new
-# cell, and that is the one that fires when the key comes back. A cell whose
-# key has no slot stays, because its readers are waiting for the key to
-# appear. Since shiny destroys a reactive along with the module it was created
-# in, cells are created in the collection's own reactive domain, whichever
-# module first reads them.
+# `reactiveVal()` cell for that key alone and then takes the slot from the
+# environment. Rather than the slot, which a `reactiveVal()` created with it
+# would keep alive for as long as it exists, the cell holds a count: each change
+# of a slot adds one to the collection's count of changes and writes the new
+# count to the key's cell, so the cell changes whenever the slot does. Reading a
+# position subscribes to a cell holding the reactive at that position, which
+# renaming leaves as it is, `length()` to one holding the number of slots, and a
+# read of every slot to one for the whole collection. Creating a cell costs far
+# more than storing a slot, so cells are created on first read, and changing a
+# collection writes only the cells that exist. Removing a slot writes its key's
+# cell as any change does and then deletes the cell, which by then has no
+# subscribers: the write invalidated every reader. A reader that reads the key
+# again creates a new cell, and that is the one that fires when the key comes
+# back. A cell whose key has no slot stays, because its readers are waiting for
+# the key to appear. Since shiny destroys a reactive along with the module it
+# was created in, cells are created in the collection's own reactive domain,
+# whichever module first reads them.
 new_reactives <- function(class) {
 
   state <- new.env(parent = emptyenv())
@@ -406,7 +409,7 @@ slot_cell <- function(x, key) {
   cell <- cells[[key]]
 
   if (is.null(cell)) {
-    cell <- new_cell(x, .subset2(x, "slots")[[key]], cell_label(x, key))
+    cell <- new_cell(x, .subset2(x, "state")$changes, cell_label(x, key))
     assign(key, cell, envir = cells)
   }
 
@@ -429,11 +432,13 @@ position_cell <- function(x, i) {
   cell <- if (i <= length(cells)) cells[[i]]
 
   if (is.null(cell)) {
-    cell <- new_cell(
-      x,
-      slot_at(x, i),
-      sprintf("%s[[%d]]", class(x)[[1L]], i)
-    )
+
+    # A `reactiveVal()` holds on to its initial value for as long as it exists,
+    # so a position cell starts empty and is set afterwards. Starting it at the
+    # slot would keep that slot alive once it is replaced.
+    cell <- new_cell(x, NULL, sprintf("%s[[%d]]", class(x)[[1L]], i))
+    cell(slot_at(x, i))
+
     state$position_cells[[i]] <- cell
   }
 
@@ -467,17 +472,10 @@ new_cell <- function(x, value, label) {
   # get a cell that outlives it.
   check_lifetime(x)
 
-  # A `reactiveVal()` holds on to its initial value for as long as it exists,
-  # so a cell starts empty and is set afterwards. Starting it at the slot
-  # would keep that slot alive once it is replaced.
-  cell <- withReactiveDomain(
+  withReactiveDomain(
     .subset2(x, "domain"),
-    reactiveVal(NULL, label = label)
+    reactiveVal(value, label = label)
   )
-
-  cell(value)
-
-  cell
 }
 
 cell_label <- function(x, key) {
@@ -491,6 +489,7 @@ cell_label <- function(x, key) {
 
 get_slot <- function(x, key) {
   slot_cell(x, key)()
+  .subset2(x, "slots")[[key]]
 }
 
 peek_slots <- function(x, keys) {
@@ -598,22 +597,19 @@ write_slot <- function(x, key, value) {
     assign(key, value, envir = slots)
   }
 
+  state <- .subset2(x, "state")
+  state$changes <- state$changes + 1L
+
   cells <- .subset2(x, "cells")
   cell <- cells[[key]]
 
   if (!is.null(cell)) {
 
-    cell(value)
+    cell(state$changes)
 
     if (is.null(value)) {
       rm(list = key, envir = cells)
     }
-  }
-
-  state <- .subset2(x, "state")
-
-  if (!is.null(state$all_slots)) {
-    state$changes <- state$changes + 1L
   }
 
   invisible(x)
