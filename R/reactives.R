@@ -10,12 +10,12 @@
 #' of either kind, use `is_reactives()`.
 #'
 #' Reading a slot, with `x$a`, `x[["a"]]` or `x[[1]]`, returns the slot's
-#' reactive, or `NULL` if there is no such slot, as `$` does on a list. Call
-#' the result to get its value, as in `x$a()`, or get the value of every slot
-#' at once with `slot_values()`, as [shiny::reactiveValuesToList()] does for a
-#' [shiny::reactiveValues()] object. Because a slot holds a reactive rather
-#' than a value, a slot whose [shiny::reactiveVal()] stores `NULL` is distinct
-#' from a missing slot.
+#' reactive. As on a list, a name with no slot reads as `NULL`, while a
+#' position past the last slot is an error. Call the result to get its value,
+#' as in `x$a()`, or get the value of every slot at once with `slot_values()`,
+#' as [shiny::reactiveValuesToList()] does for a [shiny::reactiveValues()]
+#' object. Because a slot holds a reactive rather than a value, a slot whose
+#' [shiny::reactiveVal()] stores `NULL` is distinct from a missing slot.
 #'
 #' Assigning a reactive to a slot binds it, and assigning `NULL` removes the
 #' slot, again as for a list. Assigning anything else is an error: a value is
@@ -95,10 +95,12 @@
 #' `length()` or of slots by name.
 #'
 #' To depend on the slot at a position alone, read it through a
-#' [shiny::reactiveVal()]: after `first <- reactiveVal()` and
-#' `observe(first(x[[1]]))`, a reader of `first()` re-runs only when position 1
-#' holds a different reactive, since writing a [shiny::reactiveVal()] the value
-#' it already holds invalidates nothing.
+#' [shiny::reactiveVal()]. After `first <- reactiveVal()` and
+#' `observe(first(if (length(x)) x[[1]]))`, a reader of `first()` re-runs only
+#' when position 1 comes to hold a different reactive or none, since writing a
+#' [shiny::reactiveVal()] the value it already holds invalidates nothing. The
+#' check on `length()` keeps the observer from failing on an empty collection,
+#' which in an app would end the session.
 #'
 #' Printing, `format()` and `str()` make the caller depend on nothing, and they
 #' never call a slot, so they run no computed slot. Taking a snapshot also

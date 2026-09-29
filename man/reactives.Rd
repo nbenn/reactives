@@ -58,12 +58,12 @@ of either kind, use \code{is_reactives()}.
 }
 \details{
 Reading a slot, with \code{x$a}, \code{x[["a"]]} or \code{x[[1]]}, returns the slot's
-reactive, or \code{NULL} if there is no such slot, as \code{$} does on a list. Call
-the result to get its value, as in \code{x$a()}, or get the value of every slot
-at once with \code{slot_values()}, as \code{\link[shiny:reactiveValuesToList]{shiny::reactiveValuesToList()}} does for a
-\code{\link[shiny:reactiveValues]{shiny::reactiveValues()}} object. Because a slot holds a reactive rather
-than a value, a slot whose \code{\link[shiny:reactiveVal]{shiny::reactiveVal()}} stores \code{NULL} is distinct
-from a missing slot.
+reactive. As on a list, a name with no slot reads as \code{NULL}, while a
+position past the last slot is an error. Call the result to get its value,
+as in \code{x$a()}, or get the value of every slot at once with \code{slot_values()},
+as \code{\link[shiny:reactiveValuesToList]{shiny::reactiveValuesToList()}} does for a \code{\link[shiny:reactiveValues]{shiny::reactiveValues()}}
+object. Because a slot holds a reactive rather than a value, a slot whose
+\code{\link[shiny:reactiveVal]{shiny::reactiveVal()}} stores \code{NULL} is distinct from a missing slot.
 
 Assigning a reactive to a slot binds it, and assigning \code{NULL} removes the
 slot, again as for a list. Assigning anything else is an error: a value is
@@ -148,10 +148,12 @@ computed slot. Reordering re-runs readers of \code{names()}, \code{as.list()},
 \code{length()} or of slots by name.
 
 To depend on the slot at a position alone, read it through a
-\code{\link[shiny:reactiveVal]{shiny::reactiveVal()}}: after \code{first <- reactiveVal()} and
-\code{observe(first(x[[1]]))}, a reader of \code{first()} re-runs only when position 1
-holds a different reactive, since writing a \code{\link[shiny:reactiveVal]{shiny::reactiveVal()}} the value
-it already holds invalidates nothing.
+\code{\link[shiny:reactiveVal]{shiny::reactiveVal()}}. After \code{first <- reactiveVal()} and
+\code{observe(first(if (length(x)) x[[1]]))}, a reader of \code{first()} re-runs only
+when position 1 comes to hold a different reactive or none, since writing a
+\code{\link[shiny:reactiveVal]{shiny::reactiveVal()}} the value it already holds invalidates nothing. The
+check on \code{length()} keeps the observer from failing on an empty collection,
+which in an app would end the session.
 
 Printing, \code{format()} and \code{str()} make the caller depend on nothing, and they
 never call a slot, so they run no computed slot. Taking a snapshot also
