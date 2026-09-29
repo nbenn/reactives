@@ -463,11 +463,9 @@ state_cell <- function(x, name, value, label) {
 new_cell <- function(x, value, label) {
 
   # Destroying a domain destroys the reactives created in it so far, but not
-  # one created afterwards. Reading the destroyed keys raises shiny's error
-  # rather than creating a cell that would outlive the collection.
-  if (.subset2(x, "lifetime")$destroyed) {
-    raw_keys(x)
-  }
+  # one created afterwards. Without this check, a destroyed collection would
+  # get a cell that outlives it.
+  check_lifetime(x)
 
   # A `reactiveVal()` holds on to its initial value for as long as it exists,
   # so a cell starts empty and is set afterwards. Starting it at the slot
@@ -543,11 +541,22 @@ check_collection <- function(x) {
   invisible(x)
 }
 
+# Reading the destroyed `keys` raises shiny's error.
+check_lifetime <- function(x) {
+
+  if (.subset2(x, "lifetime")$destroyed) {
+    raw_keys(x)
+  }
+
+  invisible(x)
+}
+
 bind_slot <- function(x, key, value) {
 
   check_slot(x, value)
+  check_lifetime(x)
 
-  keys <- isolate(raw_keys(x))
+  keys <- peek_keys(x)
   at <- match(key, keys)
 
   write_slot(x, key, value)
@@ -685,7 +694,8 @@ display_names <- function(keys) {
     return(assign_slot(x, i, value))
   }
 
-  keys <- isolate(raw_keys(x))
+  check_lifetime(x)
+  keys <- peek_keys(x)
 
   if (i == length(keys) + 1L) {
 
