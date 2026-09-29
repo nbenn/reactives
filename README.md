@@ -39,20 +39,23 @@ computed inputs of variadic blocks.
 library(shiny)
 library(reactives)
 
+# Let reactives be read at the console, as inside an app
+reactiveConsole(TRUE)
+
 x <- reactives(a = reactiveVal(1), b = reactive(2 * 21))
 
 # Reading a slot returns its reactive; call it for the value
-isolate(x$a())
+x$a()
 #> [1] 1
 
 # A slot that doesn't exist reads as NULL, as on a list
-isolate(is.null(x$c))
+is.null(x$c)
 #> [1] TRUE
 
 # Assigning a reactive adds or replaces a slot, and assigning NULL removes it
 x$c <- reactiveVal("new")
 x$a <- NULL
-isolate(names(x))
+names(x)
 #> [1] "b" "c"
 ```
 
