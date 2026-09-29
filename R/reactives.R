@@ -560,6 +560,7 @@ bind_slot <- function(x, key, value) {
   at <- match(key, keys)
 
   write_slot(x, key, value)
+  refresh_all_slots(x)
 
   if (is.na(at)) {
     set_keys(x, c(keys, key))
@@ -576,6 +577,7 @@ remove_slot <- function(x, key) {
 
   if (key %in% keys) {
     write_slot(x, key, NULL)
+    refresh_all_slots(x)
     set_keys(x, setdiff(keys, key))
   }
 
@@ -612,10 +614,22 @@ write_slot <- function(x, key, value) {
 
   if (!is.null(state$all_slots)) {
     state$changes <- state$changes + 1L
-    state$all_slots(state$changes)
   }
 
   invisible(x)
+}
+
+# One write of the cell invalidates every reader of the whole collection, so a
+# method that changes slots writes it once, after its last `write_slot()`,
+# rather than once per slot. A call that changes no slot leaves `changes` as it
+# was, and writing a cell the value it already holds invalidates nothing.
+refresh_all_slots <- function(x) {
+
+  state <- .subset2(x, "state")
+
+  if (!is.null(state$all_slots)) {
+    state$all_slots(state$changes)
+  }
 }
 
 assign_slot <- function(x, key, value) {
@@ -787,6 +801,7 @@ positioned_slots <- function(x, i) {
     }
   }
 
+  refresh_all_slots(x)
   set_keys(x, keys)
 
   # Rebinding a slot in place leaves its key where it was, so `set_keys()`
@@ -852,6 +867,7 @@ names.reactives <- function(x) {
     write_slot(x, new_keys[moved][[j]], slots[[j]])
   }
 
+  refresh_all_slots(x)
   set_keys(x, new_keys)
 
   x
