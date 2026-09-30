@@ -7,6 +7,24 @@ check_names <- function(i) {
   i
 }
 
+subscript_names <- function(i) {
+
+  if (!is.character(i) && !is.factor(i)) {
+    abort(
+      "Slot names must be given as a character vector.",
+      "reactives_bad_index"
+    )
+  }
+
+  i <- as.character(i)
+
+  if (anyNA(i)) {
+    abort("A slot name can't be missing.", "reactives_bad_index")
+  }
+
+  check_names(i)
+}
+
 index2 <- function(i) {
 
   if (is.factor(i)) {

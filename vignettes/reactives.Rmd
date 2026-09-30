@@ -109,6 +109,12 @@ a_doubled()
 
 A reader of a slot that doesn't exist yet gets `NULL`, and it re-runs once the slot is added. Once a slot is removed, its readers re-run and get `NULL` in turn, and calling that fails. A reader that expects the slot to go can stop quietly instead, with `req(x$a)()`.
 
+Testing whether a slot exists by looking for its name in `names(x)` would re-run the reader whenever a slot is added, removed or moved. The `has_slot()` function tests for slots with the same dependencies as reading them:
+
+```{r}
+has_slot(x, c("a", "d"))
+```
+
 Other reads depend on what they return. The `length()` method depends on the number of slots alone, `names()` on which slots exist and their order, and `slot_values()` on all of that and on every slot and its value. A reader that lists the slots, for example to offer them as choices, re-runs when a slot is added, removed or moved, but not when a value changes:
 
 ```{r}

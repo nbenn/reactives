@@ -6,6 +6,7 @@
 \alias{reorder.reactives}
 \alias{is_reactives}
 \alias{slot_values}
+\alias{has_slot}
 \alias{snapshot_reactives}
 \title{Keyed collections of reactives}
 \usage{
@@ -19,6 +20,8 @@ is_reactives(x)
 
 slot_values(x)
 
+has_slot(x, key)
+
 snapshot_reactives(x)
 }
 \arguments{
@@ -31,13 +34,17 @@ any values, including \code{NULL}, for \code{reactive_vals()}. Ignored by
 
 \item{order}{The new order, listing every slot exactly once: by position, or
 by name when all slots are named.}
+
+\item{key}{The names of the slots to test for, none of them empty or
+missing.}
 }
 \value{
 A \code{reactives} object, or for \code{reactive_vals()} a \code{reactive_vals}
 object, which is also a \code{reactives} object. A snapshot has the class of
 \code{x}. The \code{reorder()} method returns \code{x}, invisibly, \code{slot_values()}
 returns a list of the slots' values, in slot order and named as by
-\code{as.list()}, and \code{is_reactives()} returns \code{TRUE} or \code{FALSE}.
+\code{as.list()}, \code{has_slot()} returns a logical vector with one element per
+name in \code{key}, and \code{is_reactives()} returns \code{TRUE} or \code{FALSE}.
 }
 \description{
 A \code{reactives} object is a keyed collection of shiny reactives, such as
@@ -56,7 +63,15 @@ position past the last slot is an error. Call the result to get its value,
 as in \code{x$a()}, or get the value of every slot at once with \code{slot_values()},
 as \code{\link[shiny:reactiveValuesToList]{shiny::reactiveValuesToList()}} does for a \code{\link[shiny:reactiveValues]{shiny::reactiveValues()}}
 object. Because a slot holds a reactive rather than a value, a slot whose
-\code{\link[shiny:reactiveVal]{shiny::reactiveVal()}} stores \code{NULL} is distinct from a missing slot.
+\code{\link[shiny:reactiveVal]{shiny::reactiveVal()}} stores \code{NULL} is distinct from a missing slot. To
+test for slots by name, use \code{has_slot()}.
+
+Going through the slots works with \code{lapply()} and \code{vapply()}, which call
+\code{as.list()}, and with \code{Map()}, which reads them by position. A \code{for} loop,
+\code{do.call()} and purrr's \code{map()} functions don't dispatch on the class,
+though, so they see the collection's internal fields instead of its slots.
+With those, go through \code{as.list(x)} instead, as in
+\verb{for (slot in as.list(x))}.
 
 Assigning a reactive to a slot binds it, and assigning \code{NULL} removes the
 slot, again as for a list. Assigning anything else is an error: a value is
@@ -102,7 +117,10 @@ snapshot. Names, order and class carry over.
 Reading a slot by name makes the caller depend on that slot alone. The
 caller re-runs when the slot is bound, replaced or removed, but not when
 other slots change. This also holds for a slot that does not exist yet, so a
-reader re-runs once the slot is added.
+reader re-runs once the slot is added. Testing for slots with \code{has_slot()}
+has the same dependencies as reading them by name, while testing with
+\code{"a" \%in\% names(x)} depends on what \code{names()} depends on, so the caller
+re-runs whenever a slot is added, removed or moved.
 
 The \code{length()} method depends on the number of slots alone, and \code{names()} on
 which slots exist and their order. Reading a slot by position, as in
@@ -160,6 +178,7 @@ shiny::isolate(x$b())
 x$c <- shiny::reactiveVal(NULL)
 shiny::isolate(is.null(x$c))
 shiny::isolate(is.null(x$d))
+shiny::isolate(has_slot(x, c("c", "d")))
 
 # Assigning NULL removes a slot
 x$a <- NULL
