@@ -576,6 +576,32 @@ test_that("reorder() ignores the names and factor class of the order", {
   )
 })
 
+test_that("binding a slot ignores the names of its subscript", {
+
+  with_session(
+    {
+      x <- reactive_vals(a = 1)
+      x[[c(p = "b")]] <- reactiveVal(2)
+
+      expect_identical(names(x), c("a", "b"))
+
+      runs <- 0
+      observe(
+        {
+          runs <<- runs + 1
+          names(x)
+        }
+      )
+      session$flushReact()
+
+      reorder(x, c("a", "b"))
+      session$flushReact()
+
+      expect_identical(runs, 1)
+    }
+  )
+})
+
 test_that("printing and inspecting work outside a reactive context", {
 
   x <- reactive_vals(a = 1, 2)
