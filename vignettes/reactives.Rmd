@@ -11,7 +11,7 @@ vignette: >
 knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
 ```
 
-An app often holds a set of reactives that changes while it runs, such as one for each module the user adds. The set needs keys, so that one of its reactives can be read, replaced or removed without disturbing the others. The shiny package offers `reactiveValues()` for keyed stored values, but it can neither remove nor reorder keys, and it has no keyed collection of computed values. A `reactives` collection holds reactives of both kinds in slots that can be added, removed, renamed and reordered, and it tracks each slot as a dependency of its own.
+An app often holds a set of reactives that changes while it runs, such as one for each module the user adds. The set needs keys, so that one of its reactives can be read, replaced or removed without disturbing the others. The shiny package offers `reactiveValues()` for keyed stored values, but it can neither remove nor reorder keys, and it has no keyed collection of computed values. A `reactives` collection holds reactives of both kinds in slots that can be added, removed and reordered, and it tracks each slot as a dependency of its own.
 
 At the console, reading a reactive fails unless the read is wrapped in `isolate()`. The examples below turn on shiny's reactive console, which lifts that requirement, so that they read as they would inside an app:
 
@@ -109,7 +109,7 @@ a_doubled()
 
 A reader of a slot that doesn't exist yet gets `NULL`, and it re-runs once the slot is added. Once a slot is removed, its readers re-run and get `NULL` in turn, and calling that fails. A reader that expects the slot to go can stop quietly instead, with `req(x$a)()`.
 
-Other reads depend on what they return. The `length()` method depends on the number of slots alone, `names()` on which slots exist, their names and their order, and `slot_values()` on all of that and on every slot and its value. A reader that lists the slots, for example to offer them as choices, re-runs when a slot is added, removed, renamed or moved, but not when a value changes:
+Other reads depend on what they return. The `length()` method depends on the number of slots alone, `names()` on which slots exist and their order, and `slot_values()` on all of that and on every slot and its value. A reader that lists the slots, for example to offer them as choices, re-runs when a slot is added, removed or moved, but not when a value changes:
 
 ```{r}
 slot_names <- reactive(

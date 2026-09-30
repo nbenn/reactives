@@ -2,7 +2,7 @@
 #'
 #' A `reactives` object is a keyed collection of shiny reactives, such as
 #' [shiny::reactiveVal()] and [shiny::reactive()] objects. Slots can be added,
-#' removed, renamed and reordered, and each slot is tracked as its own reactive
+#' removed and reordered, and each slot is tracked as its own reactive
 #' dependency. The `reactive_vals()` constructor creates a collection whose
 #' slots are [shiny::reactiveVal()] objects holding the given values, and which
 #' only accepts [shiny::reactiveVal()] slots, so code writing through its slots
@@ -23,16 +23,17 @@
 #' [shiny::reactiveVal()] slot. Slots can be unnamed; append one with
 #' `x[[length(x) + 1]] <- value`.
 #'
-#' Subsetting with `[` and assigning with `[<-` are errors, as they are for a
-#' [shiny::reactiveValues()] object. Take the reactives of several slots from
-#' `as.list(x)[i]` instead, and bind or remove one slot at a time.
+#' Subsetting with `[`, assigning with `[<-` and renaming with `names<-` are
+#' errors, as they are for a [shiny::reactiveValues()] object. Take the
+#' reactives of several slots from `as.list(x)[i]` instead, and bind or remove
+#' one slot at a time. To rename a slot, bind its reactive under the new name,
+#' remove the old slot and restore the order with `reorder()`.
 #'
 #' @section Sharing:
 #' A collection is shared, like [shiny::reactiveValues()]: after `y <- x`, both
 #' names refer to the same collection, and a change made through `$<-`,
-#' `[[<-`, `names<-` or `reorder()` is seen by everything holding it. That is
-#' what lets one part of an app change a collection while another reacts to
-#' it. Renaming with `names<-` keeps every slot at its position, as for a list.
+#' `[[<-` or `reorder()` is seen by everything holding it. That is what lets
+#' one part of an app change a collection while another reacts to it.
 #'
 #' @section Lifetime:
 #' A collection belongs to the session or module it was created in and is
@@ -57,16 +58,16 @@
 #' other slots change. This also holds for a slot that does not exist yet, so a
 #' reader re-runs once the slot is added.
 #'
-#' The `length()` method depends on the number of slots alone, and `names()`
-#' on which slots exist, their names and their order. Reading a slot by
-#' position, as in `x[[1]]`, depends on what `names()` depends on and on the
-#' slot it finds, so the caller re-runs whenever a slot is added, removed,
-#' renamed or moved, even if the slot at its position stays the same. Reading
-#' past the last slot fails, and the caller re-runs on the same changes. The
-#' `as.list()` method depends on what `names()` depends on and on every slot,
-#' and `slot_values()` also on every slot's value. Reordering re-runs readers
-#' of `names()`, `as.list()`, `slot_values()` and of slots by position, but not
-#' readers of `length()` or of slots by name.
+#' The `length()` method depends on the number of slots alone, and `names()` on
+#' which slots exist and their order. Reading a slot by position, as in
+#' `x[[1]]`, depends on what `names()` depends on and on the slot it finds, so
+#' the caller re-runs whenever a slot is added, removed or moved, even if the
+#' slot at its position stays the same. Reading past the last slot fails, and
+#' the caller re-runs on the same changes. The `as.list()` method depends on
+#' what `names()` depends on and on every slot, and `slot_values()` also on
+#' every slot's value. Reordering re-runs readers of `names()`, `as.list()`,
+#' `slot_values()` and of slots by position, but not readers of `length()` or of
+#' slots by name.
 #'
 #' To depend on the slot at a position alone, read it through a
 #' [shiny::reactiveVal()]. After `first <- reactiveVal()` and
@@ -433,7 +434,6 @@ bind_slot <- function(x, key, value) {
   keys <- live_keys(x)
 
   write_slot(x, key, value)
-  refresh_all_slots(x)
 
   if (!key %in% keys) {
     set_keys(x, c(keys, key))
@@ -448,7 +448,6 @@ remove_slot <- function(x, key) {
 
   if (key %in% keys) {
     write_slot(x, key, NULL)
-    refresh_all_slots(x)
     set_keys(x, setdiff(keys, key))
   }
 
@@ -484,20 +483,11 @@ write_slot <- function(x, key, value) {
     }
   }
 
-  invisible(x)
-}
-
-# One write of the cell invalidates every reader of the whole collection, so a
-# method that changes slots writes it once, after its last `write_slot()`,
-# rather than once per slot. A call that changes no slot leaves `changes` as it
-# was, and writing a cell the value it already holds invalidates nothing.
-refresh_all_slots <- function(x) {
-
-  state <- .subset2(x, "state")
-
   if (!is.null(state$all_slots)) {
     state$all_slots(state$changes)
   }
+
+  invisible(x)
 }
 
 assign_slot <- function(x, key, value) {
@@ -596,8 +586,8 @@ display_names <- function(keys) {
   assign_slot(x, keys[[i]], value)
 }
 
-# A collection is a list underneath, so without these methods, base R's `[`
-# and `[<-` would reach its internal fields.
+# A collection is a list underneath, so without these methods, base R's `[`,
+# `[<-` and `names<-` would reach its internal fields.
 #' @export
 `[.reactives` <- function(x, ...) {
   abort(
@@ -621,65 +611,20 @@ display_names <- function(keys) {
 }
 
 #' @export
-names.reactives <- function(x) {
-  display_names(read_anywhere(.subset2(x, "keys")))
+`names<-.reactives` <- function(x, value) {
+  abort(
+    paste(
+      "Slots can't be renamed with `names<-`. Bind the reactive under the new",
+      "name with `x$new <- x$old`, remove the old slot with `x$old <- NULL`",
+      "and restore the order with `reorder()`."
+    ),
+    "reactives_unsupported"
+  )
 }
 
 #' @export
-`names<-.reactives` <- function(x, value) {
-
-  keys <- live_keys(x)
-
-  if (is.null(value)) {
-    value <- character(length(keys))
-  }
-
-  value <- as.character(value)
-
-  if (length(value) != length(keys) || anyNA(value)) {
-    abort(
-      "Supply one name per slot, using \"\" for an unnamed slot.",
-      "reactives_bad_names"
-    )
-  }
-
-  named <- nzchar(value)
-
-  if (anyDuplicated(value[named])) {
-    abort("Each slot needs a distinct name.", "reactives_duplicate_name")
-  }
-
-  new_keys <- keys
-  new_keys[named] <- value[named]
-
-  unnamed <- which(!named & !is_positional_key(keys))
-
-  for (j in unnamed) {
-    new_keys[[j]] <- next_positional_key(x)
-  }
-
-  moved <- new_keys != keys
-
-  if (!any(moved)) {
-    return(x)
-  }
-
-  # Read every moving slot before writing any, so that swapping two names does
-  # not overwrite a slot before it has moved.
-  slots <- peek_slots(x, keys[moved])
-
-  for (key in setdiff(keys, new_keys)) {
-    write_slot(x, key, NULL)
-  }
-
-  for (j in seq_along(slots)) {
-    write_slot(x, new_keys[moved][[j]], slots[[j]])
-  }
-
-  refresh_all_slots(x)
-  set_keys(x, new_keys)
-
-  x
+names.reactives <- function(x) {
+  display_names(read_anywhere(.subset2(x, "keys")))
 }
 
 #' @export

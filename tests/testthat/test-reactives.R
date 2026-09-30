@@ -309,7 +309,6 @@ test_that("a call that changes no slot re-runs no reader of every slot", {
       session$flushReact()
 
       x$a <- x$a
-      names(x) <- names(x)
       session$flushReact()
 
       expect_identical(runs, 1)
@@ -435,7 +434,7 @@ test_that("positions out of range and malformed indices are errors", {
   )
 })
 
-test_that("subsetting and assigning with [ are errors", {
+test_that("subsetting, assigning with [ and renaming are errors", {
 
   with_session(
     {
@@ -447,58 +446,11 @@ test_that("subsetting and assigning with [ are errors", {
 
       expect_error(x["a"] <- NULL, class = "reactives_unsupported")
       expect_error(x[] <- list(), class = "reactives_unsupported")
+
+      expect_error(names(x) <- c("a", "z"), class = "reactives_unsupported")
+      expect_error(names(x) <- NULL, class = "reactives_unsupported")
+
       expect_identical(names(x), c("a", "b"))
-    }
-  )
-})
-
-test_that("names<- renames slots in place", {
-
-  with_session(
-    {
-      a <- reactiveVal("a")
-      b <- reactiveVal("b")
-      x <- reactives(a = a, b = b)
-
-      names(x) <- c("b", "a")
-
-      expect_identical(x$b, a)
-      expect_identical(x$a, b)
-
-      names(x) <- c("", "c")
-
-      expect_identical(names(x), c("", "c"))
-      expect_identical(x[[1]], a)
-      expect_identical(x$c, b)
-      expect_null(x$a)
-
-      names(x) <- NULL
-      expect_null(names(x))
-
-      expect_error(names(x) <- c("d", "d"), class = "reactives_duplicate_name")
-      expect_error(names(x) <- "d", class = "reactives_bad_names")
-    }
-  )
-})
-
-test_that("renaming re-runs readers of the old and the new name", {
-
-  with_session(
-    {
-      a <- reactiveVal("a")
-      x <- reactives(a = a)
-
-      seen_a <- "unset"
-      seen_z <- "unset"
-      observe(seen_a <<- x$a)
-      observe(seen_z <<- x$z)
-      session$flushReact()
-
-      names(x) <- "z"
-      session$flushReact()
-
-      expect_null(seen_a)
-      expect_identical(seen_z, a)
     }
   )
 })
@@ -628,11 +580,10 @@ test_that("a collection is shared by everything holding it", {
       y <- x
 
       x$b <- reactiveVal(2)
-      names(x) <- c("p", "q")
-      z <- reorder(x, c("q", "p"))
+      z <- reorder(x, c("b", "a"))
 
-      expect_identical(names(y), c("q", "p"))
-      expect_identical(y$p, x$p)
+      expect_identical(names(y), c("b", "a"))
+      expect_identical(y$b, x$b)
       expect_identical(z, x)
     }
   )
@@ -697,7 +648,6 @@ test_that("printing or changing a destroyed collection fails", {
 
       expect_error(x$a <- NULL, class = "shiny.destroyed.error")
       expect_error(x$b <- NULL, class = "shiny.destroyed.error")
-      expect_error(names(x) <- "b", class = "shiny.destroyed.error")
       expect_error(reorder(x, "a"), class = "shiny.destroyed.error")
 
       expect_error(format(x), class = "shiny.destroyed.error")
@@ -811,7 +761,7 @@ test_that("a key's cell is deleted once its slot is removed", {
   isolate(list(x$a, x$b))
 
   x$a <- NULL
-  names(x) <- "c"
+  x[[1]] <- NULL
 
   expect_identical(
     reactlog_labels(isolate(list(x$a, x$b))),
@@ -827,25 +777,6 @@ test_that("the first read of a key, length() or every slot writes no cell", {
     reactlog_writes(isolate(list(x$a, x$b, length(x), as.list(x)))),
     character()
   )
-})
-
-test_that("a call writes reactives[] as often for one slot as for several", {
-
-  writes <- function(n) {
-
-    log <- reactlog_writes(
-      {
-        x <- do.call(reactives, lapply(seq_len(n), reactiveVal))
-        isolate(as.list(x))
-
-        names(x) <- paste0("s", seq_len(n))
-      }
-    )
-
-    sum(log == "reactives[]")
-  }
-
-  expect_identical(writes(3L), writes(1L))
 })
 
 test_that("replacing a slot releases its old reactive", {
@@ -975,9 +906,8 @@ test_that("length() re-runs when slots are added or removed, and only then", {
       )
       session$flushReact()
 
-      names(x) <- c("p", "q")
-      reorder(x, c("q", "p"))
-      x$p <- reactiveVal(3)
+      reorder(x, c("b", "a"))
+      x$a <- reactiveVal(3)
       session$flushReact()
 
       expect_identical(runs, 1)
@@ -987,7 +917,7 @@ test_that("length() re-runs when slots are added or removed, and only then", {
 
       expect_identical(runs, 2)
 
-      x$p <- NULL
+      x$a <- NULL
       session$flushReact()
 
       expect_identical(runs, 3)
