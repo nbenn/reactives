@@ -15,7 +15,15 @@
 #' as in `x$a()`, or get the value of every slot at once with `slot_values()`,
 #' as [shiny::reactiveValuesToList()] does for a [shiny::reactiveValues()]
 #' object. Because a slot holds a reactive rather than a value, a slot whose
-#' [shiny::reactiveVal()] stores `NULL` is distinct from a missing slot.
+#' [shiny::reactiveVal()] stores `NULL` is distinct from a missing slot. To
+#' test for slots by name, use `has_slot()`.
+#'
+#' Going through the slots works with `lapply()` and `vapply()`, which call
+#' `as.list()`, and with `Map()`, which reads them by position. A `for` loop,
+#' `do.call()` and purrr's `map()` functions don't dispatch on the class,
+#' though, so they see the collection's internal fields instead of its slots.
+#' With those, go through `as.list(x)` instead, as in
+#' `for (slot in as.list(x))`.
 #'
 #' Assigning a reactive to a slot binds it, and assigning `NULL` removes the
 #' slot, again as for a list. Assigning anything else is an error: a value is
@@ -56,7 +64,10 @@
 #' Reading a slot by name makes the caller depend on that slot alone. The
 #' caller re-runs when the slot is bound, replaced or removed, but not when
 #' other slots change. This also holds for a slot that does not exist yet, so a
-#' reader re-runs once the slot is added.
+#' reader re-runs once the slot is added. Testing for slots with `has_slot()`
+#' has the same dependencies as reading them by name, while testing with
+#' `"a" %in% names(x)` depends on what `names()` depends on, so the caller
+#' re-runs whenever a slot is added, removed or moved.
 #'
 #' The `length()` method depends on the number of slots alone, and `names()` on
 #' which slots exist and their order. Reading a slot by position, as in
@@ -111,7 +122,8 @@
 #'   object, which is also a `reactives` object. A snapshot has the class of
 #'   `x`. The `reorder()` method returns `x`, invisibly, `slot_values()`
 #'   returns a list of the slots' values, in slot order and named as by
-#'   `as.list()`, and `is_reactives()` returns `TRUE` or `FALSE`.
+#'   `as.list()`, `has_slot()` returns a logical vector with one element per
+#'   name in `key`, and `is_reactives()` returns `TRUE` or `FALSE`.
 #'
 #' @examples
 #' x <- reactives(a = shiny::reactiveVal(1), b = shiny::reactive(2 * 21))
@@ -122,6 +134,7 @@
 #' x$c <- shiny::reactiveVal(NULL)
 #' shiny::isolate(is.null(x$c))
 #' shiny::isolate(is.null(x$d))
+#' shiny::isolate(has_slot(x, c("c", "d")))
 #'
 #' # Assigning NULL removes a slot
 #' x$a <- NULL
@@ -202,6 +215,16 @@ is_reactives <- function(x) {
 slot_values <- function(x) {
   check_collection(x)
   lapply(as.list(x), do.call, list())
+}
+
+#' @param key The names of the slots to test for, none of them empty or
+#'   missing.
+#'
+#' @rdname reactives
+#' @export
+has_slot <- function(x, key) {
+  check_collection(x)
+  !vapply(lapply(subscript_names(key), get_slot, x = x), is.null, logical(1L))
 }
 
 build_reactives <- function(slots, class, values = FALSE) {

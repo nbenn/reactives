@@ -373,6 +373,75 @@ test_that("slot_values() needs a collection", {
   expect_error(slot_values(list()), class = "reactives_not_collection")
 })
 
+test_that("has_slot() tests for each slot by name", {
+
+  with_session(
+    {
+      x <- reactives(a = reactiveVal(1), reactiveVal(2), b = reactiveVal(NULL))
+
+      expect_identical(has_slot(x, c("a", "b", "c")), c(TRUE, TRUE, FALSE))
+      expect_identical(has_slot(x, c(p = "b", q = "c")), c(TRUE, FALSE))
+      expect_identical(has_slot(x, factor(c("c", "a"))), c(FALSE, TRUE))
+      expect_identical(has_slot(x, character()), logical())
+    }
+  )
+})
+
+test_that("has_slot() depends on the slots it tests for alone", {
+
+  with_session(
+    {
+      x <- reactive_vals(b = 1, c = 2)
+
+      runs <- 0
+      seen <- NULL
+      observe(
+        {
+          runs <<- runs + 1
+          seen <<- has_slot(x, c("a", "b"))
+        }
+      )
+      session$flushReact()
+
+      expect_identical(seen, c(FALSE, TRUE))
+
+      x$d <- reactiveVal(3)
+      reorder(x, c("d", "c", "b"))
+      x$b(4)
+      session$flushReact()
+
+      expect_identical(runs, 1)
+
+      x$b <- NULL
+      session$flushReact()
+
+      expect_identical(runs, 2)
+      expect_identical(seen, c(FALSE, FALSE))
+
+      x$a <- reactiveVal(5)
+      session$flushReact()
+
+      expect_identical(runs, 3)
+      expect_identical(seen, c(TRUE, FALSE))
+    }
+  )
+})
+
+test_that("has_slot() needs a collection and slot names", {
+
+  with_session(
+    {
+      x <- reactive_vals(a = 1)
+
+      expect_error(has_slot(list(), "a"), class = "reactives_not_collection")
+      expect_error(has_slot(x, 1), class = "reactives_bad_index")
+      expect_error(has_slot(x, NULL), class = "reactives_bad_index")
+      expect_error(has_slot(x, c("a", NA)), class = "reactives_bad_index")
+      expect_error(has_slot(x, c("a", "")), class = "reactives_bad_index")
+    }
+  )
+})
+
 test_that("unnamed slots are read and removed by position", {
 
   with_session(
