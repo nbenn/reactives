@@ -27,7 +27,7 @@ subscript_names <- function(i) {
 
 index2 <- function(i) {
 
-  if (is.factor(i)) {
+  if (is.factor(i) || is.character(i)) {
     i <- as.character(i)
   }
 
