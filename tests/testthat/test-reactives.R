@@ -546,6 +546,22 @@ test_that("reorder() takes positions, or names when all are named", {
   )
 })
 
+test_that("reorder() rejects zero, fractional and negative positions", {
+
+  with_session(
+    {
+      x <- reactive_vals(a = 1, b = 2)
+
+      expect_error(reorder(x, c(0, 2, 1)), class = "reactives_bad_order")
+      expect_error(reorder(x, c(2.5, 1.5)), class = "reactives_bad_order")
+      expect_error(reorder(x, -3), class = "reactives_bad_order")
+
+      reorder(x, c(p = 2, q = 1))
+      expect_identical(names(x), c("b", "a"))
+    }
+  )
+})
+
 test_that("reorder() ignores the names and factor class of the order", {
 
   with_session(
