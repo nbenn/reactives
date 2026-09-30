@@ -95,6 +95,13 @@
 #' slot only appears once it has been read, and the one for the number of
 #' slots once `length()` has been called.
 #'
+#' Each [shiny::reactiveVal()] that `reactive_vals()` creates for a value shows
+#' as the call that returns the value, `reactive_vals$a()` for slot `a` and
+#' `reactive_vals$...1()` for the first unnamed slot, and the error for calling
+#' it once its module is destroyed names it the same way. The label names the
+#' slot the value was created for, and stays with the [shiny::reactiveVal()] if
+#' that is later bound to another slot.
+#'
 #' @param ... For `reactives()` and `reactive_vals()`, the slots to hold, named
 #'   or unnamed: reactives, with `NULL` entries dropped, for `reactives()`, and
 #'   any values, including `NULL`, for `reactive_vals()`. Ignored by
@@ -152,10 +159,7 @@ reactives <- function(...) {
 #' @rdname reactives
 #' @export
 reactive_vals <- function(...) {
-  build_reactives(
-    lapply(list(...), reactiveVal),
-    c("reactive_vals", "reactives")
-  )
+  build_reactives(list(...), c("reactive_vals", "reactives"), values = TRUE)
 }
 
 #' @param x A `reactives` object, or for `is_reactives()`, any object.
@@ -200,9 +204,11 @@ slot_values <- function(x) {
   lapply(as.list(x), do.call, list())
 }
 
-build_reactives <- function(slots, class) {
+build_reactives <- function(slots, class, values = FALSE) {
 
-  slots <- slots[!vapply(slots, is.null, logical(1L))]
+  if (!values) {
+    slots <- slots[!vapply(slots, is.null, logical(1L))]
+  }
 
   keys <- names(slots)
 
@@ -218,12 +224,16 @@ build_reactives <- function(slots, class) {
 
   res <- new_reactives(class)
 
-  for (slot in slots) {
-    check_slot(res, slot)
-  }
-
   for (i in which(!named)) {
     keys[[i]] <- next_positional_key(res)
+  }
+
+  if (values) {
+    slots <- Map(reactiveVal, slots, paste0(cell_label(res, keys), "()"))
+  } else {
+    for (slot in slots) {
+      check_slot(res, slot)
+    }
   }
 
   names(slots) <- keys
@@ -364,13 +374,12 @@ new_cell <- function(x, value, label) {
   )
 }
 
-cell_label <- function(x, key) {
+cell_label <- function(x, keys) {
 
-  if (is_positional_key(key)) {
-    key <- sub(positional_marker(), "...", key, fixed = TRUE)
-  }
+  pos <- is_positional_key(keys)
+  keys[pos] <- sub(positional_marker(), "...", keys[pos], fixed = TRUE)
 
-  paste0(class(x)[[1L]], "$", key)
+  paste0(class(x)[[1L]], "$", keys)
 }
 
 get_slot <- function(x, key) {
