@@ -6,7 +6,6 @@
 \alias{reorder.reactives}
 \alias{is_reactives}
 \alias{slot_values}
-\alias{copy}
 \alias{snapshot_reactives}
 \title{Keyed collections of reactives}
 \usage{
@@ -20,8 +19,6 @@ is_reactives(x)
 
 slot_values(x)
 
-copy(x, deep = FALSE)
-
 snapshot_reactives(x)
 }
 \arguments{
@@ -34,17 +31,13 @@ any values, including \code{NULL}, for \code{reactive_vals()}. Ignored by
 
 \item{order}{The new order, listing every slot exactly once: by position, or
 by name when all slots are named.}
-
-\item{deep}{Whether to give each \code{\link[shiny:reactiveVal]{shiny::reactiveVal()}} slot of the copy a
-new \code{\link[shiny:reactiveVal]{shiny::reactiveVal()}} holding the slot's current value, rather than
-the one in \code{x}.}
 }
 \value{
 A \code{reactives} object, or for \code{reactive_vals()} a \code{reactive_vals}
-object, which is also a \code{reactives} object. A copy or a snapshot has the
-class of \code{x}. The \code{reorder()} method returns \code{x}, invisibly,
-\code{slot_values()} returns a list of the slots' values, in slot order and
-named as by \code{as.list()}, and \code{is_reactives()} returns \code{TRUE} or \code{FALSE}.
+object, which is also a \code{reactives} object. A snapshot has the class of
+\code{x}. The \code{reorder()} method returns \code{x}, invisibly, \code{slot_values()}
+returns a list of the slots' values, in slot order and named as by
+\code{as.list()}, and \code{is_reactives()} returns \code{TRUE} or \code{FALSE}.
 }
 \description{
 A \code{reactives} object is a keyed collection of shiny reactives, such as
@@ -94,13 +87,7 @@ Renaming with \verb{names<-} keeps every slot at its position, as for a list.
 
 A copy made with \code{[} is shallow: its slots hold the same reactives as the
 original, so after \code{y <- x["a"]}, calling \code{y$a(10)} also sets the value of
-\code{x$a()}. A deep copy, made with \code{copy(x, deep = TRUE)}, gives each
-\code{\link[shiny:reactiveVal]{shiny::reactiveVal()}} slot a new \code{\link[shiny:reactiveVal]{shiny::reactiveVal()}} holding the slot's
-current value, so writing through a slot of the copy leaves the original
-unchanged. Any other slot, such as a \code{\link[shiny:reactive]{shiny::reactive()}}, stays shared,
-since it can't be copied and can't be written through either. A computed
-slot that reads slots of the original keeps reading the original, not the
-copy. By default, \code{copy()} makes the same shallow copy as \code{x[]}.
+\code{x$a()}.
 }
 
 \section{Lifetime}{
@@ -110,8 +97,7 @@ destroyed along with it, as a \code{\link[shiny:reactiveVal]{shiny::reactiveVal(
 it from another module doesn't tie it to that module, so destroying the
 module leaves the collection intact. A reactive bound to a slot, however,
 still belongs to the module it was created in. A copy belongs to the session
-or module it is made in, and so does each new \code{\link[shiny:reactiveVal]{shiny::reactiveVal()}} of a
-deep copy.
+or module it is made in.
 
 To keep reading a collection after its \code{\link[shiny:testServer]{shiny::testServer()}} session has
 closed, a test can take a snapshot with \code{snapshot_reactives()} while the
@@ -140,12 +126,10 @@ renamed or moved, even if the slot at its position stays the same. Reading
 past the last slot fails, and the caller re-runs on the same changes.
 Subsetting by position depends on the selected slots and on what \code{names()}
 depends on. The \code{as.list()} method depends on what \code{names()} depends on and
-on every slot, and \code{slot_values()} also on every slot's value. Copying, with
-\code{x[]} or \code{copy()}, has the same dependencies as \code{as.list()}. A deep copy
-reads the values it copies without depending on them, and it runs no
-computed slot. Reordering re-runs readers of \code{names()}, \code{as.list()},
-\code{slot_values()} and of slots and subsets by position, but not readers of
-\code{length()} or of slots by name.
+on every slot, and \code{slot_values()} also on every slot's value. Copying with
+\code{x[]} has the same dependencies as \code{as.list()}. Reordering re-runs readers
+of \code{names()}, \code{as.list()}, \code{slot_values()} and of slots and subsets by
+position, but not readers of \code{length()} or of slots by name.
 
 To depend on the slot at a position alone, read it through a
 \code{\link[shiny:reactiveVal]{shiny::reactiveVal()}}. After \code{first <- reactiveVal()} and
@@ -200,11 +184,6 @@ shiny::isolate(names(z))
 
 shiny::isolate(slot_values(y))
 is_reactives(y)
-
-# A deep copy holds values of its own
-w <- shiny::isolate(copy(y, deep = TRUE))
-shiny::isolate(w$n(2))
-shiny::isolate(c(y$n(), w$n()))
 
 # A snapshot outlives the session it was taken in
 snap <- NULL

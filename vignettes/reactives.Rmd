@@ -82,15 +82,11 @@ reorder(z, c("label", "count"))
 names(y)
 ```
 
-Subsetting with `[` returns a new collection, whose slots can be bound or removed without touching the original. Its slots hold the same reactives, though, so writing through one of them writes to the original as well. A deep copy, made with `copy(y, deep = TRUE)`, gives each `reactiveVal()` slot a new `reactiveVal()` holding the slot's current value:
+Subsetting with `[` returns a new collection, whose slots can be bound or removed without touching the original. Its slots hold the same reactives, though, so writing through one of them writes to the original as well:
 
 ```{r}
 shallow <- y["count"]
 shallow$count(2)
-y$count()
-
-deep <- copy(y, deep = TRUE)
-deep$count(3)
 y$count()
 ```
 
