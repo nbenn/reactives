@@ -592,6 +592,20 @@ test_that("reorder() ignores the names and factor class of the order", {
   )
 })
 
+test_that("reorder() is exported as the generic from stats", {
+
+  expect_identical(reactives::reorder, stats::reorder)
+
+  with_session(
+    {
+      x <- reactive_vals(a = 1, b = 2)
+
+      reactives::reorder(x, c("b", "a"))
+      expect_identical(names(x), c("b", "a"))
+    }
+  )
+})
+
 test_that("binding a slot ignores the names of its subscript", {
 
   with_session(
