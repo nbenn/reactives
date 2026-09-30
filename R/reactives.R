@@ -21,39 +21,25 @@
 #' slot, again as for a list. Assigning anything else is an error: a value is
 #' written through the slot's reactive instead, as in `x$a(value)` for a
 #' [shiny::reactiveVal()] slot. Slots can be unnamed; append one with
-#' `x[[length(x) + 1]] <- value`. Assigning with `[<-` binds or removes several
-#' slots at once, taking `NULL`, a single reactive, or a list with one element
-#' per selected slot.
+#' `x[[length(x) + 1]] <- value`.
 #'
-#' Subscripts follow the rules of the vctrs package, which are stricter than
-#' base R's. Positions must be whole numbers within range, negative and
-#' positive positions can't be mixed, a logical subscript must be size 1 or
-#' match the number of slots, and unknown names, empty strings and missing
-#' values are errors. A list assigned with `[<-` is only recycled from size 1.
-#' Reading a missing name with `[[` or `$` still returns `NULL`, as on a list.
+#' Subsetting with `[` and assigning with `[<-` are errors, as they are for a
+#' [shiny::reactiveValues()] object. Take the reactives of several slots from
+#' `as.list(x)[i]` instead, and bind or remove one slot at a time.
 #'
 #' @section Sharing:
 #' A collection is shared, like [shiny::reactiveValues()]: after `y <- x`, both
 #' names refer to the same collection, and a change made through `$<-`,
-#' `[[<-`, `[<-`, `names<-` or `reorder()` is seen by everything holding it.
-#' That is what lets one part of an app change a collection while another
-#' reacts to it. Subsetting with `[` returns a new collection with its own set
-#' of slots, holding the same reactives, and `x[]` copies the whole collection.
-#' So `x <- x[order]` gives a reordered copy, which suffices when nothing else
-#' holds `x`, while `reorder(x, order)` reorders the shared collection itself.
-#' Renaming with `names<-` keeps every slot at its position, as for a list.
-#'
-#' A copy made with `[` is shallow: its slots hold the same reactives as the
-#' original, so after `y <- x["a"]`, calling `y$a(10)` also sets the value of
-#' `x$a()`.
+#' `[[<-`, `names<-` or `reorder()` is seen by everything holding it. That is
+#' what lets one part of an app change a collection while another reacts to
+#' it. Renaming with `names<-` keeps every slot at its position, as for a list.
 #'
 #' @section Lifetime:
 #' A collection belongs to the session or module it was created in and is
 #' destroyed along with it, as a [shiny::reactiveVal()] is. Reading or changing
 #' it from another module doesn't tie it to that module, so destroying the
 #' module leaves the collection intact. A reactive bound to a slot, however,
-#' still belongs to the module it was created in. A copy belongs to the session
-#' or module it is made in.
+#' still belongs to the module it was created in.
 #'
 #' To keep reading a collection after its [shiny::testServer()] session has
 #' closed, a test can take a snapshot with `snapshot_reactives()` while the
@@ -69,21 +55,18 @@
 #' Reading a slot by name makes the caller depend on that slot alone. The
 #' caller re-runs when the slot is bound, replaced or removed, but not when
 #' other slots change. This also holds for a slot that does not exist yet, so a
-#' reader re-runs once the slot is added. Subsetting with `[` by name depends
-#' on the named slots in the same way.
+#' reader re-runs once the slot is added.
 #'
 #' The `length()` method depends on the number of slots alone, and `names()`
 #' on which slots exist, their names and their order. Reading a slot by
 #' position, as in `x[[1]]`, depends on what `names()` depends on and on the
 #' slot it finds, so the caller re-runs whenever a slot is added, removed,
 #' renamed or moved, even if the slot at its position stays the same. Reading
-#' past the last slot fails, and the caller re-runs on the same changes.
-#' Subsetting by position depends on the selected slots and on what `names()`
-#' depends on. The `as.list()` method depends on what `names()` depends on and
-#' on every slot, and `slot_values()` also on every slot's value. Copying with
-#' `x[]` has the same dependencies as `as.list()`. Reordering re-runs readers
-#' of `names()`, `as.list()`, `slot_values()` and of slots and subsets by
-#' position, but not readers of `length()` or of slots by name.
+#' past the last slot fails, and the caller re-runs on the same changes. The
+#' `as.list()` method depends on what `names()` depends on and on every slot,
+#' and `slot_values()` also on every slot's value. Reordering re-runs readers
+#' of `names()`, `as.list()`, `slot_values()` and of slots by position, but not
+#' readers of `length()` or of slots by name.
 #'
 #' To depend on the slot at a position alone, read it through a
 #' [shiny::reactiveVal()]. After `first <- reactiveVal()` and
@@ -613,84 +596,28 @@ display_names <- function(keys) {
   assign_slot(x, keys[[i]], value)
 }
 
+# A collection is a list underneath, so without these methods, base R's `[`
+# and `[<-` would reach its internal fields.
 #' @export
-`[.reactives` <- function(x, i) {
-
-  if (missing(i)) {
-    slots <- as.list(x)
-  } else if (is_name_subscript(i)) {
-    slots <- named_slots(x, subscript_names(i))
-  } else {
-    slots <- positioned_slots(x, i)
-  }
-
-  build_reactives(slots, class(x))
-}
-
-named_slots <- function(x, i) {
-
-  slots <- lapply(i, get_slot, x = x)
-
-  unknown <- vapply(slots, is.null, logical(1L)) | is_positional_key(i)
-
-  if (any(unknown)) {
-    abort(
-      paste0("Unknown slot names: ", paste(i[unknown], collapse = ", "), "."),
-      "reactives_unknown_name"
-    )
-  }
-
-  names(slots) <- i
-
-  slots
-}
-
-positioned_slots <- function(x, i) {
-
-  keys <- raw_keys(x)
-  sel <- select_keys(keys, i)
-
-  if (all(keys %in% sel)) {
-    all_slots_cell(x)()
-    slots <- peek_slots(x, sel)
-  } else {
-    slots <- lapply(sel, get_slot, x = x)
-  }
-
-  names(slots) <- replace(sel, is_positional_key(sel), "")
-
-  slots
+`[.reactives` <- function(x, ...) {
+  abort(
+    paste(
+      "A collection can't be subset with `[`. Use `as.list(x)[i]` for the",
+      "reactives of the selected slots."
+    ),
+    "reactives_unsupported"
+  )
 }
 
 #' @export
-`[<-.reactives` <- function(x, i, value) {
-
-  keys <- live_keys(x)
-  targets <- if (missing(i)) keys else target_keys(keys, i)
-  values <- recycle_values(value, length(targets))
-
-  # Check every value before binding any, so that a bad element leaves the
-  # collection unchanged.
-  for (slot in values[!vapply(values, is.null, logical(1L))]) {
-    check_slot(x, slot)
-  }
-
-  for (j in seq_along(targets)) {
-
-    key <- targets[[j]]
-    write_slot(x, key, values[[j]])
-
-    if (is.null(values[[j]])) {
-      keys <- keys[keys != key]
-    } else if (!key %in% keys) {
-      keys <- c(keys, key)
-    }
-  }
-
-  refresh_all_slots(x)
-  set_keys(x, keys)
-
-  x
+`[<-.reactives` <- function(x, ..., value) {
+  abort(
+    paste(
+      "Slots can't be bound or removed with `[<-`. Bind or remove one slot at",
+      "a time with `[[<-` or `$<-`."
+    ),
+    "reactives_unsupported"
+  )
 }
 
 #' @export

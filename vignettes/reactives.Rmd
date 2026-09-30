@@ -82,14 +82,6 @@ reorder(z, c("label", "count"))
 names(y)
 ```
 
-Subsetting with `[` returns a new collection, whose slots can be bound or removed without touching the original. Its slots hold the same reactives, though, so writing through one of them writes to the original as well:
-
-```{r}
-shallow <- y["count"]
-shallow$count(2)
-y$count()
-```
-
 ## Each slot is a dependency of its own
 
 Reading a slot makes the reader depend on that slot alone: the reader re-runs when the slot is bound, replaced or removed, but not when another slot changes. A reader that calls the slot's reactive also depends on its value, as it would on any reactive. A `reactive()` that reports each computation shows this, since it only recomputes once something it read has changed:
@@ -136,7 +128,7 @@ x$b <- NULL
 slot_names()
 ```
 
-See the Dependencies section of `?reactives` for reads by position, subsets and copies.
+See the Dependencies section of `?reactives` for reads by position.
 
 ## In an app
 
