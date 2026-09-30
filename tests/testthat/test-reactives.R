@@ -740,6 +740,17 @@ test_that("reactlog labels a read by position with its key, and length() too", {
   expect_false("reactives$a" %in% labels)
 })
 
+test_that("reactive_vals() labels each value as the call that returns it", {
+
+  expect_identical(
+    reactlog_labels(reactive_vals(1, a = 2, NULL)),
+    c(
+      "names(reactive_vals)", "reactive_vals$...1()", "reactive_vals$a()",
+      "reactive_vals$...2()"
+    )
+  )
+})
+
 test_that("a key's cell is created when the key is first read", {
 
   labels <- reactlog_labels(

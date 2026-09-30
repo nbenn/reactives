@@ -142,6 +142,13 @@ reordering. A read of every slot at once, such as \code{as.list()}, shows a
 single dependency on \code{reactives[]} instead of one per slot. The entry for a
 slot only appears once it has been read, and the one for the number of
 slots once \code{length()} has been called.
+
+Each \code{\link[shiny:reactiveVal]{shiny::reactiveVal()}} that \code{reactive_vals()} creates for a value shows
+as the call that returns the value, \code{reactive_vals$a()} for slot \code{a} and
+\code{reactive_vals$...1()} for the first unnamed slot, and the error for calling
+it once its module is destroyed names it the same way. The label names the
+slot the value was created for, and stays with the \code{\link[shiny:reactiveVal]{shiny::reactiveVal()}} if
+that is later bound to another slot.
 }
 
 \examples{
