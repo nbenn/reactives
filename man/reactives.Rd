@@ -42,7 +42,7 @@ returns a list of the slots' values, in slot order and named as by
 \description{
 A \code{reactives} object is a keyed collection of shiny reactives, such as
 \code{\link[shiny:reactiveVal]{shiny::reactiveVal()}} and \code{\link[shiny:reactive]{shiny::reactive()}} objects. Slots can be added,
-removed, renamed and reordered, and each slot is tracked as its own reactive
+removed and reordered, and each slot is tracked as its own reactive
 dependency. The \code{reactive_vals()} constructor creates a collection whose
 slots are \code{\link[shiny:reactiveVal]{shiny::reactiveVal()}} objects holding the given values, and which
 only accepts \code{\link[shiny:reactiveVal]{shiny::reactiveVal()}} slots, so code writing through its slots
@@ -64,17 +64,18 @@ written through the slot's reactive instead, as in \code{x$a(value)} for a
 \code{\link[shiny:reactiveVal]{shiny::reactiveVal()}} slot. Slots can be unnamed; append one with
 \code{x[[length(x) + 1]] <- value}.
 
-Subsetting with \code{[} and assigning with \verb{[<-} are errors, as they are for a
-\code{\link[shiny:reactiveValues]{shiny::reactiveValues()}} object. Take the reactives of several slots from
-\code{as.list(x)[i]} instead, and bind or remove one slot at a time.
+Subsetting with \code{[}, assigning with \verb{[<-} and renaming with \verb{names<-} are
+errors, as they are for a \code{\link[shiny:reactiveValues]{shiny::reactiveValues()}} object. Take the
+reactives of several slots from \code{as.list(x)[i]} instead, and bind or remove
+one slot at a time. To rename a slot, bind its reactive under the new name,
+remove the old slot and restore the order with \code{reorder()}.
 }
 \section{Sharing}{
 
 A collection is shared, like \code{\link[shiny:reactiveValues]{shiny::reactiveValues()}}: after \code{y <- x}, both
 names refer to the same collection, and a change made through \verb{$<-},
-\verb{[[<-}, \verb{names<-} or \code{reorder()} is seen by everything holding it. That is
-what lets one part of an app change a collection while another reacts to
-it. Renaming with \verb{names<-} keeps every slot at its position, as for a list.
+\verb{[[<-} or \code{reorder()} is seen by everything holding it. That is what lets
+one part of an app change a collection while another reacts to it.
 }
 
 \section{Lifetime}{
@@ -103,16 +104,16 @@ caller re-runs when the slot is bound, replaced or removed, but not when
 other slots change. This also holds for a slot that does not exist yet, so a
 reader re-runs once the slot is added.
 
-The \code{length()} method depends on the number of slots alone, and \code{names()}
-on which slots exist, their names and their order. Reading a slot by
-position, as in \code{x[[1]]}, depends on what \code{names()} depends on and on the
-slot it finds, so the caller re-runs whenever a slot is added, removed,
-renamed or moved, even if the slot at its position stays the same. Reading
-past the last slot fails, and the caller re-runs on the same changes. The
-\code{as.list()} method depends on what \code{names()} depends on and on every slot,
-and \code{slot_values()} also on every slot's value. Reordering re-runs readers
-of \code{names()}, \code{as.list()}, \code{slot_values()} and of slots by position, but not
-readers of \code{length()} or of slots by name.
+The \code{length()} method depends on the number of slots alone, and \code{names()} on
+which slots exist and their order. Reading a slot by position, as in
+\code{x[[1]]}, depends on what \code{names()} depends on and on the slot it finds, so
+the caller re-runs whenever a slot is added, removed or moved, even if the
+slot at its position stays the same. Reading past the last slot fails, and
+the caller re-runs on the same changes. The \code{as.list()} method depends on
+what \code{names()} depends on and on every slot, and \code{slot_values()} also on
+every slot's value. Reordering re-runs readers of \code{names()}, \code{as.list()},
+\code{slot_values()} and of slots by position, but not readers of \code{length()} or of
+slots by name.
 
 To depend on the slot at a position alone, read it through a
 \code{\link[shiny:reactiveVal]{shiny::reactiveVal()}}. After \code{first <- reactiveVal()} and
