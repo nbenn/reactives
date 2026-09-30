@@ -184,10 +184,10 @@ reactive_vals <- function(...) {
 reorder.reactives <- function(x, order, ...) {
 
   keys <- live_keys(x)
-  new_keys <- if (is.numeric(order)) keys[order] else as.character(order)
+  positions <- if (is.numeric(order)) order else match(order, keys)
 
-  valid <- length(new_keys) == length(keys) && !anyNA(new_keys) &&
-    setequal(new_keys, keys) && !anyDuplicated(new_keys)
+  valid <- length(positions) == length(keys) &&
+    setequal(positions, seq_along(keys))
 
   if (!valid) {
     abort(
@@ -199,7 +199,7 @@ reorder.reactives <- function(x, order, ...) {
     )
   }
 
-  set_keys(x, new_keys)
+  set_keys(x, keys[positions])
 
   invisible(x)
 }
