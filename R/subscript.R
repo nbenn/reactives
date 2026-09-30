@@ -25,6 +25,20 @@ subscript_names <- function(i) {
   check_names(i)
 }
 
+subscript_name <- function(i) {
+
+  i <- subscript_names(i)
+
+  if (length(i) != 1L) {
+    abort(
+      sprintf("Expected a single slot name, not %d values.", length(i)),
+      "reactives_bad_index"
+    )
+  }
+
+  i
+}
+
 index2 <- function(i) {
 
   if (is.factor(i) || is.character(i)) {

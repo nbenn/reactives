@@ -65,6 +65,18 @@ is.null(x$d())
 is.null(x$e)
 ```
 
+To write a value whether or not its slot exists, as assigning to a `reactiveValues()` object does, use `slot_value<-`. It writes through the slot's `reactiveVal()`, which stays in place, and where there is no slot, it binds a new one holding the value:
+
+```{r}
+slot_value(x, "a") <- 11
+identical(x$a, a)
+
+slot_value(x, "e") <- "added"
+x$e()
+```
+
+Writing to a computed slot this way is an error too, and assigning `NULL` stores `NULL` rather than removing the slot.
+
 For a collection of stored values, `reactive_vals()` wraps each value it is given in a `reactiveVal()`. Such a collection only ever holds `reactiveVal()` slots, so code writing through its slots can rely on them being writable. The `slot_values()` function returns the value of every slot, as `reactiveValuesToList()` does for `reactiveValues()`:
 
 ```{r}
@@ -202,7 +214,7 @@ shinyApp(ui, server)
 
 The total reads every slot's value, so it re-runs whenever a term is added, removed or changed, while a reader of `names(terms)` would re-run only when a term is added or removed.
 
-A collection belongs to the session or module it was created in, here the app's session, and is destroyed along with it. Changing it from a module doesn't tie it to that module. A reactive bound to a slot, however, belongs to the module that created it and is destroyed with that module, after which calling it fails. That is why each module removes its slot in `session$onDestroy()`, which runs however the module is destroyed, so that no reader of the collection calls a destroyed reactive.
+A collection belongs to the session or module it was created in, here the app's session, and is destroyed along with it. Changing it from a module doesn't tie it to that module. A reactive bound to a slot, however, belongs to the module that created it and is destroyed with that module, after which calling it fails. That is why each module removes its slot in `session$onDestroy()`, which runs however the module is destroyed, so that no reader of the collection calls a destroyed reactive. By contrast, the `reactiveVal()` that `slot_value<-` creates for a new slot belongs to the collection, whichever module writes the value.
 
 ## Testing
 

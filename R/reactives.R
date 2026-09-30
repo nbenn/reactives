@@ -31,6 +31,12 @@
 #' [shiny::reactiveVal()] slot. Slots can be unnamed; append one with
 #' `x[[length(x) + 1]] <- value`.
 #'
+#' To write a value by name whether or not its slot exists, as assigning to a
+#' [shiny::reactiveValues()] object does, use `slot_value(x, key) <- value`.
+#' It writes through the slot's [shiny::reactiveVal()], or binds a new one
+#' holding the value if there is no slot. Writing to a computed slot is an
+#' error, and assigning `NULL` stores `NULL` rather than removing the slot.
+#'
 #' Subsetting with `[`, assigning with `[<-` and renaming with `names<-` are
 #' errors, as they are for a [shiny::reactiveValues()] object. Take the
 #' reactives of several slots from `as.list(x)[i]` instead, and bind or remove
@@ -48,7 +54,9 @@
 #' destroyed along with it, as a [shiny::reactiveVal()] is. Reading or changing
 #' it from another module doesn't tie it to that module, so destroying the
 #' module leaves the collection intact. A reactive bound to a slot, however,
-#' still belongs to the module it was created in.
+#' still belongs to the module it was created in, while the
+#' [shiny::reactiveVal()] that `slot_value<-` creates for a new slot belongs to
+#' the collection, whichever module writes the value.
 #'
 #' To keep reading a collection after its [shiny::testServer()] session has
 #' closed, a test can take a snapshot with `snapshot_reactives()` while the
@@ -88,6 +96,12 @@
 #' check on `length()` keeps the observer from failing on an empty collection,
 #' which in an app would end the session.
 #'
+#' Writing a value with `slot_value<-` makes the caller depend on nothing.
+#' Where the slot exists, it keeps its [shiny::reactiveVal()], so the write
+#' re-runs only the readers of the slot's value, and only if the value changes.
+#' Where it doesn't, the write binds a new slot and re-runs readers as any
+#' binding does.
+#'
 #' Printing, `format()` and `str()` make the caller depend on nothing, and they
 #' never call a slot, so they run no computed slot. Taking a snapshot also
 #' makes the caller depend on nothing, though it runs every computed slot.
@@ -106,12 +120,12 @@
 #' slot only appears once it has been read, and the one for the number of
 #' slots once `length()` has been called.
 #'
-#' Each [shiny::reactiveVal()] that `reactive_vals()` creates for a value shows
-#' as the call that returns the value, `reactive_vals$a()` for slot `a` and
-#' `reactive_vals$...1()` for the first unnamed slot, and the error for calling
-#' it once its module is destroyed names it the same way. The label names the
-#' slot the value was created for, and stays with the [shiny::reactiveVal()] if
-#' that is later bound to another slot.
+#' Each [shiny::reactiveVal()] that `reactive_vals()` or `slot_value<-` creates
+#' for a value shows as the call that returns the value, `reactive_vals$a()`
+#' for slot `a` and `reactive_vals$...1()` for the first unnamed slot, and the
+#' error for calling it once its module is destroyed names it the same way. The
+#' label names the slot the value was created for, and stays with the
+#' [shiny::reactiveVal()] if that is later bound to another slot.
 #'
 #' @param ... For `reactives()` and `reactive_vals()`, the slots to hold, named
 #'   or unnamed: reactives, with `NULL` entries dropped, for `reactives()`, and
@@ -120,10 +134,11 @@
 #'
 #' @return A `reactives` object, or for `reactive_vals()` a `reactive_vals`
 #'   object, which is also a `reactives` object. A snapshot has the class of
-#'   `x`. The `reorder()` method returns `x`, invisibly, `slot_values()`
-#'   returns a list of the slots' values, in slot order and named as by
-#'   `as.list()`, `has_slot()` returns a logical vector with one element per
-#'   name in `key`, and `is_reactives()` returns `TRUE` or `FALSE`.
+#'   `x`. The `reorder()` method and `slot_value<-` return `x`, the former
+#'   invisibly, `slot_values()` returns a list of the slots' values, in slot
+#'   order and named as by `as.list()`, `has_slot()` returns a logical vector
+#'   with one element per name in `key`, and `is_reactives()` returns `TRUE` or
+#'   `FALSE`.
 #'
 #' @examples
 #' x <- reactives(a = shiny::reactiveVal(1), b = shiny::reactive(2 * 21))
@@ -148,6 +163,9 @@
 #' reorder(y, c("label", "n"))
 #' shiny::isolate(names(z))
 #'
+#' # Write a value by name, binding a new slot if there is none
+#' slot_value(y, "n") <- 2
+#' slot_value(y, "total") <- 3
 #' shiny::isolate(slot_values(y))
 #' is_reactives(y)
 #'
@@ -217,7 +235,8 @@ slot_values <- function(x) {
   lapply(as.list(x), do.call, list())
 }
 
-#' @param key The names of the slots to test for, none of them empty or
+#' @param key For `has_slot()`, the names of the slots to test for, and for
+#'   `slot_value<-`, the name of the slot to write. No name can be empty or
 #'   missing.
 #'
 #' @rdname reactives
@@ -225,6 +244,28 @@ slot_values <- function(x) {
 has_slot <- function(x, key) {
   check_collection(x)
   !vapply(lapply(subscript_names(key), get_slot, x = x), is.null, logical(1L))
+}
+
+#' @param value For `slot_value<-`, the value to write, including `NULL`.
+#'
+#' @rdname reactives
+#' @export
+`slot_value<-` <- function(x, key, value) {
+
+  check_collection(x)
+  key <- subscript_name(key)
+
+  check_lifetime(x)
+  slot <- peek_slot(x, key)
+
+  if (is.null(slot)) {
+    bind_slot(x, key, new_cell(x, value, value_label(x, key)))
+  } else {
+    check_writable(slot, key)
+    slot(value)
+  }
+
+  x
 }
 
 build_reactives <- function(slots, class, values = FALSE) {
@@ -252,7 +293,7 @@ build_reactives <- function(slots, class, values = FALSE) {
   }
 
   if (values) {
-    slots <- Map(reactiveVal, slots, paste0(cell_label(res, keys), "()"))
+    slots <- Map(reactiveVal, slots, value_label(res, keys))
   } else {
     for (slot in slots) {
       check_slot(res, slot)
@@ -405,8 +446,16 @@ cell_label <- function(x, keys) {
   paste0(class(x)[[1L]], "$", keys)
 }
 
+value_label <- function(x, keys) {
+  paste0(cell_label(x, keys), "()")
+}
+
 get_slot <- function(x, key) {
   slot_cell(x, key)()
+  peek_slot(x, key)
+}
+
+peek_slot <- function(x, key) {
   .subset2(x, "slots")[[key]]
 }
 
@@ -438,6 +487,24 @@ check_slot <- function(x, value) {
   }
 
   invisible(value)
+}
+
+check_writable <- function(slot, key) {
+
+  if (!inherits(slot, "reactiveVal")) {
+    abort(
+      sprintf(
+        paste(
+          "Slot `%s` holds a computed reactive, which can't be written.",
+          "Bind a `reactiveVal()` to the slot to replace it."
+        ),
+        key
+      ),
+      "reactives_not_reactive_val"
+    )
+  }
+
+  invisible(slot)
 }
 
 check_collection <- function(x) {

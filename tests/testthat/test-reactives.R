@@ -442,6 +442,189 @@ test_that("has_slot() needs a collection and slot names", {
   )
 })
 
+test_that("slot_value<- writes through the slot's reactiveVal, keeping it", {
+
+  with_session(
+    {
+      a <- reactiveVal(1)
+      x <- reactives(a = a)
+
+      slot_runs <- 0
+      value_runs <- 0
+
+      observe(
+        {
+          slot_runs <<- slot_runs + 1
+          x$a
+        }
+      )
+
+      observe(
+        {
+          value_runs <<- value_runs + 1
+          x$a()
+        }
+      )
+
+      session$flushReact()
+
+      slot_value(x, "a") <- 1
+      session$flushReact()
+
+      expect_identical(value_runs, 1)
+
+      slot_value(x, "a") <- 2
+      session$flushReact()
+
+      expect_identical(x$a, a)
+      expect_identical(a(), 2)
+      expect_identical(slot_runs, 1)
+      expect_identical(value_runs, 2)
+    }
+  )
+})
+
+test_that("slot_value<- binds a reactiveVal holding the value to a new slot", {
+
+  with_session(
+    {
+      x <- reactive_vals(a = 1)
+
+      seen <- "unset"
+      observe(seen <<- x$b)
+      session$flushReact()
+
+      slot_value(x, "b") <- 2
+      session$flushReact()
+
+      expect_s3_class(seen, "reactiveVal")
+      expect_identical(seen, x$b)
+      expect_identical(x$b(), 2)
+
+      slot_value(x, c(p = "c")) <- 3
+      slot_value(x, factor("d")) <- 4
+
+      expect_identical(names(x), c("a", "b", "c", "d"))
+    }
+  )
+})
+
+test_that("slot_value<- stores NULL rather than removing the slot", {
+
+  with_session(
+    {
+      x <- reactive_vals(a = 1)
+
+      slot_value(x, "a") <- NULL
+      slot_value(x, "b") <- NULL
+
+      expect_identical(slot_values(x), list(a = NULL, b = NULL))
+    }
+  )
+})
+
+test_that("slot_value<- can't write to a computed slot", {
+
+  with_session(
+    {
+      b <- reactive(2)
+      x <- reactives(b = b)
+
+      expect_error(
+        slot_value(x, "b") <- 3,
+        class = "reactives_not_reactive_val"
+      )
+      expect_identical(x$b, b)
+
+      slot_value(x, "a") <- 1
+      expect_identical(slot_values(x), list(b = 2, a = 1))
+    }
+  )
+})
+
+test_that("slot_value<- creates its reactiveVal in the collection's session", {
+
+  with_session(
+    {
+      x <- reactive_vals()
+
+      moduleServer(
+        "child",
+        function(input, output, session) {
+          slot_value(x, "a") <- 1
+        }
+      )
+      session$destroy("child")
+
+      expect_identical(x$a(), 1)
+    }
+  )
+})
+
+test_that("slot_value<- makes the caller depend on nothing", {
+
+  with_session(
+    {
+      x <- reactive_vals()
+
+      runs <- 0
+      observe(
+        {
+          runs <<- runs + 1
+          slot_value(x, "a") <- runs
+        }
+      )
+      session$flushReact()
+
+      slot_value(x, "a") <- 10
+      x$b <- reactiveVal(2)
+      session$flushReact()
+
+      expect_identical(runs, 1)
+    }
+  )
+})
+
+test_that("slot_value<- works outside a reactive context", {
+
+  x <- reactive_vals(a = 1)
+
+  slot_value(x, "a") <- 2
+  slot_value(x, "b") <- 3
+
+  expect_identical(isolate(slot_values(x)), list(a = 2, b = 3))
+})
+
+test_that("slot_value<- needs a collection and a single slot name", {
+
+  with_session(
+    {
+      x <- reactive_vals(a = 1)
+      y <- list()
+
+      expect_error(slot_value(y, "a") <- 1, class = "reactives_not_collection")
+      expect_error(slot_value(x, 1) <- 1, class = "reactives_bad_index")
+      expect_error(slot_value(x, NULL) <- 1, class = "reactives_bad_index")
+      expect_error(slot_value(x, NA) <- 1, class = "reactives_bad_index")
+      expect_error(slot_value(x, "") <- 1, class = "reactives_bad_index")
+      expect_error(
+        slot_value(x, NA_character_) <- 1,
+        class = "reactives_bad_index"
+      )
+      expect_error(
+        slot_value(x, c("a", "b")) <- 1,
+        class = "reactives_bad_index"
+      )
+      expect_error(
+        slot_value(x, character()) <- 1,
+        class = "reactives_bad_index"
+      )
+
+      expect_identical(slot_values(x), list(a = 1))
+    }
+  )
+})
+
 test_that("unnamed slots are read and removed by position", {
 
   with_session(
@@ -760,6 +943,8 @@ test_that("printing or changing a destroyed collection fails", {
       expect_error(x$a <- NULL, class = "shiny.destroyed.error")
       expect_error(x$b <- NULL, class = "shiny.destroyed.error")
       expect_error(reorder(x, "a"), class = "shiny.destroyed.error")
+      expect_error(slot_value(x, "a") <- 2, class = "shiny.destroyed.error")
+      expect_error(slot_value(x, "b") <- 2, class = "shiny.destroyed.error")
 
       expect_error(format(x), class = "shiny.destroyed.error")
       expect_error(print(x), class = "shiny.destroyed.error")
@@ -859,6 +1044,22 @@ test_that("reactive_vals() labels each value as the call that returns it", {
       "names(reactive_vals)", "reactive_vals$...1()", "reactive_vals$a()",
       "reactive_vals$...2()"
     )
+  )
+})
+
+test_that("slot_value<- labels its reactiveVal as reactive_vals() does", {
+
+  x <- reactives()
+  y <- reactive_vals()
+
+  expect_identical(
+    reactlog_labels(
+      {
+        slot_value(x, "a") <- 1
+        slot_value(y, "b") <- 2
+      }
+    ),
+    c("reactives$a()", "reactive_vals$b()")
   )
 })
 
