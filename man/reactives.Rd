@@ -62,32 +62,19 @@ Assigning a reactive to a slot binds it, and assigning \code{NULL} removes the
 slot, again as for a list. Assigning anything else is an error: a value is
 written through the slot's reactive instead, as in \code{x$a(value)} for a
 \code{\link[shiny:reactiveVal]{shiny::reactiveVal()}} slot. Slots can be unnamed; append one with
-\code{x[[length(x) + 1]] <- value}. Assigning with \verb{[<-} binds or removes several
-slots at once, taking \code{NULL}, a single reactive, or a list with one element
-per selected slot.
+\code{x[[length(x) + 1]] <- value}.
 
-Subscripts follow the rules of the vctrs package, which are stricter than
-base R's. Positions must be whole numbers within range, negative and
-positive positions can't be mixed, a logical subscript must be size 1 or
-match the number of slots, and unknown names, empty strings and missing
-values are errors. A list assigned with \verb{[<-} is only recycled from size 1.
-Reading a missing name with \code{[[} or \code{$} still returns \code{NULL}, as on a list.
+Subsetting with \code{[} and assigning with \verb{[<-} are errors, as they are for a
+\code{\link[shiny:reactiveValues]{shiny::reactiveValues()}} object. Take the reactives of several slots from
+\code{as.list(x)[i]} instead, and bind or remove one slot at a time.
 }
 \section{Sharing}{
 
 A collection is shared, like \code{\link[shiny:reactiveValues]{shiny::reactiveValues()}}: after \code{y <- x}, both
 names refer to the same collection, and a change made through \verb{$<-},
-\verb{[[<-}, \verb{[<-}, \verb{names<-} or \code{reorder()} is seen by everything holding it.
-That is what lets one part of an app change a collection while another
-reacts to it. Subsetting with \code{[} returns a new collection with its own set
-of slots, holding the same reactives, and \code{x[]} copies the whole collection.
-So \code{x <- x[order]} gives a reordered copy, which suffices when nothing else
-holds \code{x}, while \code{reorder(x, order)} reorders the shared collection itself.
-Renaming with \verb{names<-} keeps every slot at its position, as for a list.
-
-A copy made with \code{[} is shallow: its slots hold the same reactives as the
-original, so after \code{y <- x["a"]}, calling \code{y$a(10)} also sets the value of
-\code{x$a()}.
+\verb{[[<-}, \verb{names<-} or \code{reorder()} is seen by everything holding it. That is
+what lets one part of an app change a collection while another reacts to
+it. Renaming with \verb{names<-} keeps every slot at its position, as for a list.
 }
 
 \section{Lifetime}{
@@ -96,8 +83,7 @@ A collection belongs to the session or module it was created in and is
 destroyed along with it, as a \code{\link[shiny:reactiveVal]{shiny::reactiveVal()}} is. Reading or changing
 it from another module doesn't tie it to that module, so destroying the
 module leaves the collection intact. A reactive bound to a slot, however,
-still belongs to the module it was created in. A copy belongs to the session
-or module it is made in.
+still belongs to the module it was created in.
 
 To keep reading a collection after its \code{\link[shiny:testServer]{shiny::testServer()}} session has
 closed, a test can take a snapshot with \code{snapshot_reactives()} while the
@@ -115,21 +101,18 @@ snapshot. Names, order and class carry over.
 Reading a slot by name makes the caller depend on that slot alone. The
 caller re-runs when the slot is bound, replaced or removed, but not when
 other slots change. This also holds for a slot that does not exist yet, so a
-reader re-runs once the slot is added. Subsetting with \code{[} by name depends
-on the named slots in the same way.
+reader re-runs once the slot is added.
 
 The \code{length()} method depends on the number of slots alone, and \code{names()}
 on which slots exist, their names and their order. Reading a slot by
 position, as in \code{x[[1]]}, depends on what \code{names()} depends on and on the
 slot it finds, so the caller re-runs whenever a slot is added, removed,
 renamed or moved, even if the slot at its position stays the same. Reading
-past the last slot fails, and the caller re-runs on the same changes.
-Subsetting by position depends on the selected slots and on what \code{names()}
-depends on. The \code{as.list()} method depends on what \code{names()} depends on and
-on every slot, and \code{slot_values()} also on every slot's value. Copying with
-\code{x[]} has the same dependencies as \code{as.list()}. Reordering re-runs readers
-of \code{names()}, \code{as.list()}, \code{slot_values()} and of slots and subsets by
-position, but not readers of \code{length()} or of slots by name.
+past the last slot fails, and the caller re-runs on the same changes. The
+\code{as.list()} method depends on what \code{names()} depends on and on every slot,
+and \code{slot_values()} also on every slot's value. Reordering re-runs readers
+of \code{names()}, \code{as.list()}, \code{slot_values()} and of slots by position, but not
+readers of \code{length()} or of slots by name.
 
 To depend on the slot at a position alone, read it through a
 \code{\link[shiny:reactiveVal]{shiny::reactiveVal()}}. After \code{first <- reactiveVal()} and
