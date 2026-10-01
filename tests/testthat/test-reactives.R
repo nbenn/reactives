@@ -1335,6 +1335,14 @@ test_that("writing a value labels its reactiveVal as reactive_vals() does", {
   )
 })
 
+test_that("no keys get no labels", {
+
+  x <- reactive_vals()
+
+  expect_identical(cell_label(x, character()), character())
+  expect_identical(value_label(x, character()), character())
+})
+
 test_that("a key's cell is created when the key is first read", {
 
   labels <- reactlog_labels(
