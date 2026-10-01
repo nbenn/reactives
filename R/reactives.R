@@ -17,11 +17,11 @@
 #' position past the last slot is an error. A slot whose [shiny::reactiveVal()]
 #' stores `NULL` reads as `NULL` with `$` and `[[` too, but not with `[`, which
 #' tells it apart from a missing slot. To test for slots by name, use
-#' `has_slot()`.
+#' `has_key()`.
 #'
 #' Each read takes a single name or position. Take the reactives of several
 #' slots from `as.list(x)[i]` instead, or get the value of every slot at once
-#' with `slot_values()`, as [shiny::reactiveValuesToList()] does for a
+#' with `as_values()`, as [shiny::reactiveValuesToList()] does for a
 #' [shiny::reactiveValues()] object. Going through the slots' reactives works
 #' with `lapply()` and `vapply()`, which call `as.list()`, while `Map()` reads
 #' the slots by position with `[[` and so goes through their values. A `for`
@@ -81,7 +81,7 @@
 #' does not exist yet, so a reader re-runs once the slot is added. Reading the
 #' slot's value, as in `x$a` or `x[["a"]]`, depends on the slot and on its
 #' value, as calling its reactive does, so the caller also re-runs when the
-#' value changes. Testing for slots with `has_slot()` has the same
+#' value changes. Testing for slots with `has_key()` has the same
 #' dependencies as reading their reactives by name, while testing with
 #' `"a" %in% names(x)` depends on what `names()` depends on, so the caller
 #' re-runs whenever a slot is added, removed or moved.
@@ -93,8 +93,8 @@
 #' added, removed or moved, even if the slot at its position stays the same.
 #' Reading past the last slot fails, and the caller re-runs on the same
 #' changes. The `as.list()` method depends on what `names()` depends on and on
-#' every slot, and `slot_values()` also on every slot's value. Reordering
-#' re-runs readers of `names()`, `as.list()`, `slot_values()` and of slots by
+#' every slot, and `as_values()` also on every slot's value. Reordering
+#' re-runs readers of `names()`, `as.list()`, `as_values()` and of slots by
 #' position, but not readers of `length()` or of slots by name.
 #'
 #' To depend on the slot at a position alone, read it through a
@@ -144,9 +144,9 @@
 #'
 #' @return A `reactives` object, or for `reactive_vals()` a `reactive_vals`
 #'   object, which is also a `reactives` object. A snapshot has the class of
-#'   `x`. The `reorder()` method returns `x`, invisibly, `slot_values()`
+#'   `x`. The `reorder()` method returns `x`, invisibly, `as_values()`
 #'   returns a list of the slots' values, in slot order and named as by
-#'   `as.list()`, `has_slot()` returns a logical vector with one element per
+#'   `as.list()`, `has_key()` returns a logical vector with one element per
 #'   name in `key`, and `is_reactives()` returns `TRUE` or `FALSE`.
 #'
 #' @examples
@@ -157,12 +157,12 @@
 #' # Assigning a value writes it, adding a slot if there is none
 #' x$a <- 2
 #' x$c <- NULL
-#' shiny::isolate(slot_values(x))
+#' shiny::isolate(as_values(x))
 #'
 #' # A stored NULL reads as NULL, but `[` finds the slot's reactive
 #' shiny::isolate(is.null(x$c))
 #' shiny::isolate(is.null(x["c"]))
-#' shiny::isolate(has_slot(x, c("c", "d")))
+#' shiny::isolate(has_key(x, c("c", "d")))
 #'
 #' # Assigning a reactive with `[<-` binds it, and assigning NULL removes a slot
 #' x["d"] <- shiny::reactive(10 * x$a)
@@ -178,7 +178,7 @@
 #' reorder(y, c("label", "n"))
 #' shiny::isolate(names(z))
 #'
-#' shiny::isolate(slot_values(y))
+#' shiny::isolate(as_values(y))
 #' is_reactives(y)
 #'
 #' # A snapshot outlives the session it was taken in
@@ -242,7 +242,7 @@ is_reactives <- function(x) {
 
 #' @rdname reactives
 #' @export
-slot_values <- function(x) {
+as_values <- function(x) {
   check_collection(x)
   lapply(as.list(x), do.call, list())
 }
@@ -252,7 +252,7 @@ slot_values <- function(x) {
 #'
 #' @rdname reactives
 #' @export
-has_slot <- function(x, key) {
+has_key <- function(x, key) {
   check_collection(x)
   !vapply(lapply(subscript_names(key), get_slot, x = x), is.null, logical(1L))
 }
