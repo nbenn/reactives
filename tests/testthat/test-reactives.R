@@ -1058,7 +1058,7 @@ test_that("reactive_vals() only accepts reactiveVal slots", {
       expect_s3_class(x, "reactives")
 
       expect_error(x["b"] <- reactive(2), class = "reactives_not_reactive_val")
-      expect_error(x["b"] <- 2, class = "reactives_not_reactive")
+      expect_error(x["b"] <- 2, class = "reactives_not_reactive_val")
 
       x["b"] <- reactiveVal(2)
       expect_identical(x$b, 2)
@@ -1083,12 +1083,12 @@ test_that("reactive_exprs() only accepts reactive expressions", {
         x["b"] <- reactiveVal(2),
         class = "reactives_not_reactive_expr"
       )
-      expect_error(x["b"] <- 2, class = "reactives_not_reactive")
+      expect_error(x["b"] <- 2, class = "reactives_not_reactive_expr")
       expect_error(
         reactive_exprs(a = reactiveVal(1)),
         class = "reactives_not_reactive_expr"
       )
-      expect_error(reactive_exprs(a = 1), class = "reactives_not_reactive")
+      expect_error(reactive_exprs(a = 1), class = "reactives_not_reactive_expr")
 
       x["b"] <- reactive(2)
       x["a"] <- NULL

@@ -483,22 +483,12 @@ get_value <- function(x, key) {
 
 check_slot <- function(x, value) {
 
-  if (!is.reactive(value)) {
-    abort(
-      paste(
-        "A slot holds a reactive, such as `reactiveVal()` or `reactive()`.",
-        "Assign `NULL` with `[<-` to remove a slot, or write a value with",
-        "`$<-` or `[[<-`."
-      ),
-      "reactives_not_reactive"
-    )
-  }
-
   if (inherits(x, "reactive_vals") && !inherits(value, "reactiveVal")) {
     abort(
       paste(
-        "A `reactive_vals` collection only holds `reactiveVal()` slots.",
-        "Use `reactives()` for a collection that also holds other reactives."
+        "A `reactive_vals` collection only holds `reactiveVal()` slots. Write",
+        "a value with `$<-` or `[[<-` instead, or use `reactives()` for a",
+        "collection that also holds other reactives."
       ),
       "reactives_not_reactive_val"
     )
@@ -512,6 +502,17 @@ check_slot <- function(x, value) {
         "holds other reactives."
       ),
       "reactives_not_reactive_expr"
+    )
+  }
+
+  if (!is.reactive(value)) {
+    abort(
+      paste(
+        "A slot holds a reactive, such as `reactiveVal()` or `reactive()`.",
+        "Assign `NULL` with `[<-` to remove a slot, or write a value with",
+        "`$<-` or `[[<-`."
+      ),
+      "reactives_not_reactive"
     )
   }
 
