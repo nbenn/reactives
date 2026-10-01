@@ -1,17 +1,30 @@
-test_that("reading a slot returns its reactive, or NULL for no slot", {
+test_that("reading with [ returns a slot's reactive, or NULL for no slot", {
 
   with_session(
     {
       a <- reactiveVal(1)
       x <- reactives(a = a)
 
-      expect_identical(x$a, a)
-      expect_identical(x[["a"]], a)
-      expect_identical(x[[1]], a)
-      expect_identical(x$a(), 1)
+      expect_identical(x["a"], a)
+      expect_identical(x[1], a)
 
-      expect_null(x$b)
-      expect_null(x[["b"]])
+      expect_null(x["b"])
+    }
+  )
+})
+
+test_that("reading with $ or [[ returns a slot's value, or NULL for no slot", {
+
+  with_session(
+    {
+      x <- reactives(a = reactiveVal(1), b = reactive(2))
+
+      expect_identical(x$a, 1)
+      expect_identical(x[["a"]], 1)
+      expect_identical(x[[2]], 2)
+
+      expect_null(x$c)
+      expect_null(x[["c"]])
     }
   )
 })
@@ -22,31 +35,31 @@ test_that("a stored NULL is distinct from a missing slot", {
     {
       x <- reactive_vals(a = NULL)
 
-      expect_true(is.reactive(x$a))
-      expect_null(x$a())
+      expect_true(is.reactive(x["a"]))
+      expect_null(x$a)
       expect_identical(names(x), "a")
 
-      expect_null(x$b)
+      expect_null(x["b"])
     }
   )
 })
 
-test_that("assigning NULL removes a slot, as for a list", {
+test_that("assigning NULL with [<- removes a slot, as for a list", {
 
   with_session(
     {
       x <- reactive_vals(a = 1, b = 2)
 
-      x$a <- NULL
+      x["a"] <- NULL
 
-      expect_null(x$a)
+      expect_null(x["a"])
       expect_identical(names(x), "b")
       expect_identical(length(x), 1L)
 
-      x[["b"]] <- NULL
+      x[1] <- NULL
       expect_identical(length(x), 0L)
 
-      x$zzz <- NULL
+      x["zzz"] <- NULL
       expect_identical(length(x), 0L)
     }
   )
@@ -58,8 +71,8 @@ test_that("only a reactive can be bound to a slot", {
     {
       x <- reactives()
 
-      expect_error(x$a <- 1, class = "reactives_not_reactive")
-      expect_error(x[["a"]] <- function() 1, class = "reactives_not_reactive")
+      expect_error(x["a"] <- 1, class = "reactives_not_reactive")
+      expect_error(x[1] <- function() 1, class = "reactives_not_reactive")
       expect_error(reactives(a = 1), class = "reactives_not_reactive")
 
       expect_identical(length(x), 0L)
@@ -92,14 +105,14 @@ test_that("a reader of one slot isn't re-run when another slot changes", {
       observe(
         {
           runs <<- runs + 1
-          x$a
+          x["a"]
         }
       )
       session$flushReact()
 
-      x$b <- reactiveVal(3)
-      x$c <- reactiveVal(4)
-      x$b <- NULL
+      x["b"] <- reactiveVal(3)
+      x["c"] <- reactiveVal(4)
+      x["b"] <- NULL
       reorder(x, c("c", "a"))
       session$flushReact()
 
@@ -115,13 +128,13 @@ test_that("a reader of a missing slot re-runs when the slot is added", {
       x <- reactives()
 
       seen <- "unset"
-      observe(seen <<- x$a)
+      observe(seen <<- x["a"])
       session$flushReact()
 
       expect_null(seen)
 
       a <- reactiveVal(1)
-      x$a <- a
+      x["a"] <- a
       session$flushReact()
 
       expect_identical(seen, a)
@@ -141,23 +154,67 @@ test_that("a reader re-runs on removal and again when the slot is re-added", {
       observe(
         {
           runs <<- runs + 1
-          seen <<- x$a
+          seen <<- x["a"]
         }
       )
       session$flushReact()
 
-      x$a <- NULL
+      x["a"] <- NULL
       session$flushReact()
 
       expect_identical(runs, 2)
       expect_null(seen)
 
       a2 <- reactiveVal(2)
-      x$a <- a2
+      x["a"] <- a2
       session$flushReact()
 
       expect_identical(runs, 3)
       expect_identical(seen, a2)
+    }
+  )
+})
+
+test_that("a reader of a value re-runs when its slot or the value changes", {
+
+  with_session(
+    {
+      x <- reactive_vals(a = 1, b = 2)
+
+      runs <- 0
+      seen <- NULL
+      observe(
+        {
+          runs <<- runs + 1
+          seen <<- x[["a"]]
+        }
+      )
+      session$flushReact()
+
+      x$b <- 3
+      x$c <- 4
+      reorder(x, c("c", "b", "a"))
+      session$flushReact()
+
+      expect_identical(runs, 1)
+
+      x$a <- 5
+      session$flushReact()
+
+      expect_identical(runs, 2)
+      expect_identical(seen, 5)
+
+      x["a"] <- reactiveVal(6)
+      session$flushReact()
+
+      expect_identical(runs, 3)
+      expect_identical(seen, 6)
+
+      x["a"] <- NULL
+      session$flushReact()
+
+      expect_identical(runs, 4)
+      expect_null(seen)
     }
   )
 })
@@ -169,12 +226,12 @@ test_that("replacing a slot's reactive re-runs readers of its value", {
       x <- reactives(a = reactive("first"))
 
       seen <- NULL
-      observe(seen <<- x$a())
+      observe(seen <<- x$a)
       session$flushReact()
 
       expect_identical(seen, "first")
 
-      x$a <- reactive("second")
+      x["a"] <- reactive("second")
       session$flushReact()
 
       expect_identical(seen, "second")
@@ -189,10 +246,10 @@ test_that("writing through a stored slot re-runs readers of its value", {
       x <- reactive_vals(a = 1)
 
       seen <- NULL
-      observe(seen <<- x$a())
+      observe(seen <<- x$a)
       session$flushReact()
 
-      x$a(5)
+      x$a <- 5
       session$flushReact()
 
       expect_identical(seen, 5)
@@ -216,13 +273,13 @@ test_that("names() and length() don't re-run on slot changes", {
       )
       session$flushReact()
 
-      x$a(2)
-      x$a <- reactiveVal(3)
+      x$a <- 2
+      x["a"] <- reactiveVal(3)
       session$flushReact()
 
       expect_identical(runs, 1)
 
-      x$b <- reactiveVal(4)
+      x["b"] <- reactiveVal(4)
       session$flushReact()
 
       expect_identical(runs, 2)
@@ -249,7 +306,7 @@ test_that("reordering re-runs readers of names() but not of single slots", {
       observe(
         {
           slot_runs <<- slot_runs + 1
-          x$a
+          x["a"]
         }
       )
 
@@ -279,13 +336,13 @@ test_that("as.list() returns the slots and re-runs on any change", {
       expect_identical(seen, list(a = a))
 
       b <- reactive(2)
-      x$b <- b
+      x["b"] <- b
       session$flushReact()
 
       expect_identical(seen, list(a = a, b = b))
 
       a2 <- reactiveVal(3)
-      x$a <- a2
+      x["a"] <- a2
       session$flushReact()
 
       expect_identical(seen, list(a = a2, b = b))
@@ -308,7 +365,7 @@ test_that("a call that changes no slot re-runs no reader of every slot", {
       )
       session$flushReact()
 
-      x$a <- x$a
+      x["a"] <- x["a"]
       session$flushReact()
 
       expect_identical(runs, 1)
@@ -343,15 +400,15 @@ test_that("slot_values() re-runs when a slot or its value changes", {
       observe(seen <<- slot_values(x))
       session$flushReact()
 
-      x$a(10)
+      x$a <- 10
       session$flushReact()
       expect_identical(seen, list(a = 10, b = 2))
 
-      x$c <- reactiveVal(3)
+      x["c"] <- reactiveVal(3)
       session$flushReact()
       expect_identical(seen, list(a = 10, b = 2, c = 3))
 
-      x$b <- NULL
+      x["b"] <- NULL
       reorder(x, c("c", "a"))
       session$flushReact()
       expect_identical(seen, list(c = 3, a = 10))
@@ -405,20 +462,20 @@ test_that("has_slot() depends on the slots it tests for alone", {
 
       expect_identical(seen, c(FALSE, TRUE))
 
-      x$d <- reactiveVal(3)
+      x["d"] <- reactiveVal(3)
       reorder(x, c("d", "c", "b"))
-      x$b(4)
+      x$b <- 4
       session$flushReact()
 
       expect_identical(runs, 1)
 
-      x$b <- NULL
+      x["b"] <- NULL
       session$flushReact()
 
       expect_identical(runs, 2)
       expect_identical(seen, c(FALSE, FALSE))
 
-      x$a <- reactiveVal(5)
+      x["a"] <- reactiveVal(5)
       session$flushReact()
 
       expect_identical(runs, 3)
@@ -442,6 +499,190 @@ test_that("has_slot() needs a collection and slot names", {
   )
 })
 
+test_that("writing a value goes through the slot's reactiveVal, keeping it", {
+
+  with_session(
+    {
+      a <- reactiveVal(1)
+      x <- reactives(a = a)
+
+      slot_runs <- 0
+      value_runs <- 0
+
+      observe(
+        {
+          slot_runs <<- slot_runs + 1
+          x["a"]
+        }
+      )
+
+      observe(
+        {
+          value_runs <<- value_runs + 1
+          x$a
+        }
+      )
+
+      session$flushReact()
+
+      x$a <- 1
+      session$flushReact()
+
+      expect_identical(value_runs, 1)
+
+      x[["a"]] <- 2
+      session$flushReact()
+
+      expect_identical(x["a"], a)
+      expect_identical(a(), 2)
+      expect_identical(slot_runs, 1)
+      expect_identical(value_runs, 2)
+
+      x[[1]] <- 3
+      expect_identical(a(), 3)
+    }
+  )
+})
+
+test_that("writing a value binds a reactiveVal holding it to a new slot", {
+
+  with_session(
+    {
+      x <- reactive_vals(a = 1)
+
+      seen <- "unset"
+      observe(seen <<- x["b"])
+      session$flushReact()
+
+      x$b <- 2
+      session$flushReact()
+
+      expect_s3_class(seen, "reactiveVal")
+      expect_identical(seen, x["b"])
+      expect_identical(x$b, 2)
+
+      x[[c(p = "c")]] <- 3
+      x[[factor("d")]] <- 4
+
+      expect_identical(names(x), c("a", "b", "c", "d"))
+    }
+  )
+})
+
+test_that("assigning NULL with $<- or [[<- stores NULL", {
+
+  with_session(
+    {
+      x <- reactive_vals(a = 1)
+
+      x$a <- NULL
+      x[["b"]] <- NULL
+
+      expect_identical(slot_values(x), list(a = NULL, b = NULL))
+    }
+  )
+})
+
+test_that("a reactive is written as a value rather than bound", {
+
+  with_session(
+    {
+      a <- reactiveVal(1)
+      b <- reactive(2)
+      x <- reactive_vals()
+
+      x$a <- a
+      x[["b"]] <- b
+
+      expect_identical(x$a, a)
+      expect_identical(x[["b"]], b)
+      expect_false(identical(x["a"], a))
+
+      x$a <- b
+      expect_identical(x$a, b)
+    }
+  )
+})
+
+test_that("a slot holding a reactive expression can't be written", {
+
+  with_session(
+    {
+      b <- reactive(2)
+      x <- reactives(b = b)
+
+      expect_error(x$b <- 3, class = "reactives_not_reactive_val")
+      expect_error(x[["b"]] <- NULL, class = "reactives_not_reactive_val")
+      expect_error(x[[1]] <- 3, class = "reactives_not_reactive_val")
+      expect_identical(x["b"], b)
+
+      x$a <- 1
+      expect_identical(slot_values(x), list(b = 2, a = 1))
+    }
+  )
+})
+
+test_that("writing creates a slot's reactiveVal in the collection's session", {
+
+  with_session(
+    {
+      x <- reactive_vals()
+
+      moduleServer(
+        "child",
+        function(input, output, session) {
+          x$a <- 1
+          x[[2]] <- 2
+        }
+      )
+      session$destroy("child")
+
+      expect_identical(slot_values(x), list(a = 1, 2))
+    }
+  )
+})
+
+test_that("binding, removing and writing make the caller depend on nothing", {
+
+  with_session(
+    {
+      x <- reactive_vals(a = 1, b = 2)
+
+      runs <- 0
+      observe(
+        {
+          runs <<- runs + 1
+          x["c"] <- reactiveVal(runs)
+          x[2] <- NULL
+          x$d <- runs
+          x[[1]] <- runs
+        }
+      )
+      session$flushReact()
+
+      x$a <- 10
+      x$c <- 20
+      x$d <- 30
+      x["e"] <- reactiveVal(5)
+      reorder(x, c("e", "d", "c", "a"))
+      session$flushReact()
+
+      expect_identical(runs, 1)
+    }
+  )
+})
+
+test_that("writing a value works outside a reactive context", {
+
+  x <- reactive_vals(a = 1)
+
+  x$a <- 2
+  x[["b"]] <- 3
+  x[[3]] <- 4
+
+  expect_identical(isolate(slot_values(x)), list(a = 2, b = 3, 4))
+})
+
 test_that("unnamed slots are read and removed by position", {
 
   with_session(
@@ -453,13 +694,14 @@ test_that("unnamed slots are read and removed by position", {
       x <- reactives(u1, a = a, u2)
 
       expect_identical(names(x), c("", "a", ""))
-      expect_identical(x[[1]], u1)
-      expect_identical(x[[3]], u2)
+      expect_identical(x[1], u1)
+      expect_identical(x[3], u2)
+      expect_identical(x[[3]], "u2")
       expect_identical(as.list(x), list(u1, a = a, u2))
 
-      x[[1]] <- NULL
+      x[1] <- NULL
       expect_identical(names(x), c("a", ""))
-      expect_identical(x[[2]], u2)
+      expect_identical(x[2], u2)
 
       expect_null(names(reactives(u1, u2)))
     }
@@ -473,13 +715,19 @@ test_that("assigning one past the end appends an unnamed slot", {
       x <- reactive_vals(a = 1)
       u <- reactiveVal("u")
 
-      x[[length(x) + 1]] <- u
+      x[length(x) + 1] <- u
 
       expect_identical(names(x), c("a", ""))
-      expect_identical(x[[2]], u)
+      expect_identical(x[2], u)
 
-      x[[length(x) + 1]] <- NULL
+      x[length(x) + 1] <- NULL
       expect_identical(length(x), 2L)
+
+      x[[length(x) + 1]] <- "v"
+      x[[length(x) + 1]] <- NULL
+
+      expect_identical(names(x), c("a", "", "", ""))
+      expect_identical(slot_values(x), list(a = 1, "u", "v", NULL))
     }
   )
 })
@@ -490,30 +738,39 @@ test_that("positions out of range and malformed indices are errors", {
     {
       x <- reactive_vals(a = 1)
 
+      expect_error(x[2], class = "reactives_out_of_bounds")
       expect_error(x[[2]], class = "reactives_out_of_bounds")
-      expect_error(x[[3]] <- reactiveVal(1), class = "reactives_out_of_bounds")
+      expect_error(x[3] <- reactiveVal(1), class = "reactives_out_of_bounds")
+      expect_error(x[[3]] <- 1, class = "reactives_out_of_bounds")
       expect_error(x[[c("a", "b")]], class = "reactives_bad_index")
+      expect_error(x[[c("a", "b")]] <- 1, class = "reactives_bad_index")
       expect_error(x[[1.5]], class = "reactives_bad_index")
+      expect_error(x[1.5] <- NULL, class = "reactives_bad_index")
       expect_error(x[[0]], class = "reactives_bad_index")
+      expect_error(x[0], class = "reactives_bad_index")
       expect_error(x[[-1]], class = "reactives_bad_index")
       expect_error(x[[TRUE]], class = "reactives_bad_index")
+      expect_error(x[TRUE], class = "reactives_bad_index")
       expect_error(x[[NA_integer_]], class = "reactives_bad_index")
       expect_error(x[[""]], class = "reactives_bad_index")
+      expect_error(x[[""]] <- 1, class = "reactives_bad_index")
+      expect_error(x[NA_character_], class = "reactives_bad_index")
     }
   )
 })
 
-test_that("subsetting, assigning with [ and renaming are errors", {
+test_that("[ and [<- take a single slot, and renaming is an error", {
 
   with_session(
     {
       x <- reactive_vals(a = 1, b = 2)
 
-      expect_error(x["a"], class = "reactives_unsupported")
-      expect_error(x[1], class = "reactives_unsupported")
+      expect_error(x[c("a", "b")], class = "reactives_unsupported")
+      expect_error(x[1:2], class = "reactives_unsupported")
+      expect_error(x[character()], class = "reactives_unsupported")
       expect_error(x[], class = "reactives_unsupported")
 
-      expect_error(x["a"] <- NULL, class = "reactives_unsupported")
+      expect_error(x[c("a", "b")] <- NULL, class = "reactives_unsupported")
       expect_error(x[] <- list(), class = "reactives_unsupported")
 
       expect_error(names(x) <- c("a", "z"), class = "reactives_unsupported")
@@ -534,7 +791,7 @@ test_that("reorder() takes positions, or names when all are named", {
 
       reorder(x, c(2, 1))
       expect_identical(names(x), c("a", ""))
-      expect_identical(x[[2]], u)
+      expect_identical(x[2], u)
 
       expect_error(
         reorder(x, c("a", "")),
@@ -611,7 +868,7 @@ test_that("binding a slot ignores the names of its subscript", {
   with_session(
     {
       x <- reactive_vals(a = 1)
-      x[[c(p = "b")]] <- reactiveVal(2)
+      x[c(p = "b")] <- reactiveVal(2)
 
       expect_identical(names(x), c("a", "b"))
 
@@ -644,7 +901,7 @@ test_that("printing and inspecting work outside a reactive context", {
   expect_identical(names(x), c("a", ""))
   expect_identical(length(x), 2L)
 
-  x$b <- reactiveVal(3)
+  x["b"] <- reactiveVal(3)
   expect_identical(names(x), c("a", "", "b"))
 })
 
@@ -686,8 +943,8 @@ test_that("printing and inspecting don't subscribe or run a computed slot", {
       )
       session$flushReact()
 
-      x$a <- reactiveVal(2)
-      x$c <- reactiveVal(3)
+      x["a"] <- reactiveVal(2)
+      x["c"] <- reactiveVal(3)
       reorder(x, c("c", "b", "a"))
       session$flushReact()
 
@@ -704,11 +961,13 @@ test_that("a collection is shared by everything holding it", {
       x <- reactive_vals(a = 1)
       y <- x
 
-      x$b <- reactiveVal(2)
+      x["b"] <- reactiveVal(2)
+      x$a <- 3
       z <- reorder(x, c("b", "a"))
 
       expect_identical(names(y), c("b", "a"))
-      expect_identical(y$b, x$b)
+      expect_identical(y["b"], x["b"])
+      expect_identical(y$a, 3)
       expect_identical(z, x)
     }
   )
@@ -720,13 +979,13 @@ test_that("a slot first read in a module survives the module", {
     {
       x <- reactives()
 
-      moduleServer("child", function(input, output, session) x$a)
+      moduleServer("child", function(input, output, session) x["a"])
       session$destroy("child")
 
       a <- reactiveVal(1)
-      x$a <- a
+      x["a"] <- a
 
-      expect_identical(x$a, a)
+      expect_identical(x["a"], a)
     }
   )
 })
@@ -736,9 +995,11 @@ test_that("a collection is destroyed along with its module", {
   with_session(
     {
       x <- moduleServer("child", function(input, output, session) reactives())
-      x$a <- reactiveVal(1)
+      x["a"] <- reactiveVal(1)
       session$destroy("child")
 
+      expect_error(x["a"], class = "shiny.destroyed.error")
+      expect_error(x[1], class = "shiny.destroyed.error")
       expect_error(x$a, class = "shiny.destroyed.error")
       expect_error(x[[1]], class = "shiny.destroyed.error")
       expect_error(names(x), class = "shiny.destroyed.error")
@@ -752,13 +1013,13 @@ test_that("binding a slot of a destroyed collection fails", {
   with_session(
     {
       x <- moduleServer("child", function(input, output, session) reactives())
-      x$a <- reactiveVal(1)
+      x["a"] <- reactiveVal(1)
       session$destroy("child")
 
-      expect_error(x$a <- reactiveVal(2), class = "shiny.destroyed.error")
-      expect_error(x[[1]] <- reactiveVal(2), class = "shiny.destroyed.error")
-      expect_error(x$b <- reactiveVal(2), class = "shiny.destroyed.error")
-      expect_error(x[[2]] <- reactiveVal(2), class = "shiny.destroyed.error")
+      expect_error(x["a"] <- reactiveVal(2), class = "shiny.destroyed.error")
+      expect_error(x[1] <- reactiveVal(2), class = "shiny.destroyed.error")
+      expect_error(x["b"] <- reactiveVal(2), class = "shiny.destroyed.error")
+      expect_error(x[2] <- reactiveVal(2), class = "shiny.destroyed.error")
     }
   )
 })
@@ -768,12 +1029,17 @@ test_that("printing or changing a destroyed collection fails", {
   with_session(
     {
       x <- moduleServer("child", function(input, output, session) reactives())
-      x$a <- reactiveVal(1)
+      x["a"] <- reactiveVal(1)
       session$destroy("child")
 
-      expect_error(x$a <- NULL, class = "shiny.destroyed.error")
-      expect_error(x$b <- NULL, class = "shiny.destroyed.error")
+      expect_error(x["a"] <- NULL, class = "shiny.destroyed.error")
+      expect_error(x["b"] <- NULL, class = "shiny.destroyed.error")
       expect_error(reorder(x, "a"), class = "shiny.destroyed.error")
+
+      expect_error(x$a <- 2, class = "shiny.destroyed.error")
+      expect_error(x[[1]] <- 2, class = "shiny.destroyed.error")
+      expect_error(x$b <- 2, class = "shiny.destroyed.error")
+      expect_error(x[[2]] <- 2, class = "shiny.destroyed.error")
 
       expect_error(format(x), class = "shiny.destroyed.error")
       expect_error(print(x), class = "shiny.destroyed.error")
@@ -791,10 +1057,10 @@ test_that("reactive_vals() only accepts reactiveVal slots", {
       expect_s3_class(x, "reactive_vals")
       expect_s3_class(x, "reactives")
 
-      expect_error(x$b <- reactive(2), class = "reactives_not_reactive_val")
+      expect_error(x["b"] <- reactive(2), class = "reactives_not_reactive_val")
 
-      x$b <- reactiveVal(2)
-      expect_identical(x$b(), 2)
+      x["b"] <- reactiveVal(2)
+      expect_identical(x$b, 2)
 
       y <- reactives(a = reactiveVal(1), b = reactive(2))
       expect_false(inherits(y, "reactive_vals"))
@@ -812,6 +1078,18 @@ test_that("is_reactives() is TRUE for either kind of collection only", {
   expect_false(is_reactives(reactiveVal(1)))
 })
 
+test_that("lapply() goes through the reactives, and Map() through the values", {
+
+  with_session(
+    {
+      x <- reactives(a = reactiveVal(1), reactive(2))
+
+      expect_identical(lapply(x, is.reactive), list(a = TRUE, TRUE))
+      expect_identical(Map(identity, x), list(a = 1, 2))
+    }
+  )
+})
+
 test_that("reactlog labels each slot with the class and key", {
 
   labels <- reactlog_labels(
@@ -821,10 +1099,10 @@ test_that("reactlog labels each slot with the class and key", {
 
       isolate(
         {
-          x[[1]]
-          x$a
-          x[[3]]
-          y$b
+          x[1]
+          x["a"]
+          x[3]
+          y["b"]
           as.list(x)
         }
       )
@@ -854,7 +1132,7 @@ test_that("reactlog labels a read by position with its key, and length() too", {
 
       isolate(
         {
-          x[[2]]
+          x[2]
           length(x)
         }
       )
@@ -865,7 +1143,7 @@ test_that("reactlog labels a read by position with its key, and length() too", {
   expect_false("reactives$a" %in% labels)
 })
 
-test_that("reactive_vals() labels each value as the call that returns it", {
+test_that("reactive_vals() labels each value after its slot", {
 
   expect_identical(
     reactlog_labels(reactive_vals(1, a = 2, NULL)),
@@ -873,6 +1151,23 @@ test_that("reactive_vals() labels each value as the call that returns it", {
       "names(reactive_vals)", "reactive_vals$...1()", "reactive_vals$a()",
       "reactive_vals$...2()"
     )
+  )
+})
+
+test_that("writing a value labels its reactiveVal as reactive_vals() does", {
+
+  x <- reactives()
+  y <- reactive_vals()
+
+  expect_identical(
+    reactlog_labels(
+      {
+        x$a <- 1
+        y[["b"]] <- 2
+        y[[2]] <- 3
+      }
+    ),
+    c("reactives$a()", "reactive_vals$b()", "reactive_vals$...1()")
   )
 })
 
@@ -888,19 +1183,19 @@ test_that("a key's cell is created when the key is first read", {
 
   expect_identical(grep("$", labels, fixed = TRUE, value = TRUE), character())
 
-  expect_identical(reactlog_labels(isolate(x$a)), "reactives$a")
+  expect_identical(reactlog_labels(isolate(x["a"])), "reactives$a")
 })
 
 test_that("a key's cell is deleted once its slot is removed", {
 
   x <- reactives(a = reactiveVal(1), b = reactiveVal(2))
-  isolate(list(x$a, x$b))
+  isolate(list(x["a"], x["b"]))
 
-  x$a <- NULL
-  x[[1]] <- NULL
+  x["a"] <- NULL
+  x[1] <- NULL
 
   expect_identical(
-    reactlog_labels(isolate(list(x$a, x$b))),
+    reactlog_labels(isolate(list(x["a"], x["b"]))),
     c("reactives$a", "reactives$b")
   )
 })
@@ -910,7 +1205,7 @@ test_that("the first read of a key, length() or every slot writes no cell", {
   x <- reactives(a = reactiveVal(1))
 
   expect_identical(
-    reactlog_writes(isolate(list(x$a, x$b, length(x), as.list(x)))),
+    reactlog_writes(isolate(list(x["a"], x$b, length(x), as.list(x)))),
     character()
   )
 })
@@ -928,9 +1223,9 @@ test_that("replacing a slot releases its old reactive", {
       x <- reactives(a = reactiveVal(tracked))
       rm(tracked)
 
-      x$a
-      x[[1]]
-      x$a <- reactiveVal(2)
+      x["a"]
+      x[1]
+      x["a"] <- reactiveVal(2)
       gc()
 
       expect_true(released)
@@ -964,13 +1259,13 @@ test_that("a reader by position re-runs when another slot moves there", {
       x <- reactive_vals(a = 1, b = 2, c = 3)
 
       seen <- NULL
-      observe(seen <<- x[[1]])
+      observe(seen <<- x[1])
       session$flushReact()
 
       reorder(x, c("c", "a", "b"))
       session$flushReact()
 
-      expect_identical(seen, x$c)
+      expect_identical(seen, x["c"])
     }
   )
 })
@@ -982,19 +1277,42 @@ test_that("a reader by position re-runs when its slot is replaced or removed", {
       x <- reactive_vals(a = 1, b = 2)
 
       seen <- NULL
-      observe(seen <<- x[[1]])
+      observe(seen <<- x[1])
       session$flushReact()
 
       a <- reactiveVal(10)
-      x$a <- a
+      x["a"] <- a
       session$flushReact()
 
       expect_identical(seen, a)
 
-      x$a <- NULL
+      x["a"] <- NULL
       session$flushReact()
 
-      expect_identical(seen, x$b)
+      expect_identical(seen, x["b"])
+    }
+  )
+})
+
+test_that("a reader of a value by position re-runs when the value changes", {
+
+  with_session(
+    {
+      x <- reactive_vals(a = 1, b = 2)
+
+      seen <- NULL
+      observe(seen <<- x[[1]])
+      session$flushReact()
+
+      x$a <- 10
+      session$flushReact()
+
+      expect_identical(seen, 10)
+
+      reorder(x, c("b", "a"))
+      session$flushReact()
+
+      expect_identical(seen, 2)
     }
   )
 })
@@ -1007,19 +1325,19 @@ test_that("a reader beyond the last slot re-runs once a slot arrives there", {
 
       seen <- "unset"
       observe(
-        seen <<- tryCatch(x[[2]], reactives_out_of_bounds = function(e) NULL)
+        seen <<- tryCatch(x[2], reactives_out_of_bounds = function(e) NULL)
       )
       session$flushReact()
 
       expect_null(seen)
 
       u <- reactiveVal(2)
-      x[[2]] <- u
+      x[2] <- u
       session$flushReact()
 
       expect_identical(seen, u)
 
-      x[[2]] <- NULL
+      x[2] <- NULL
       session$flushReact()
 
       expect_null(seen)
@@ -1043,17 +1361,18 @@ test_that("length() re-runs when slots are added or removed, and only then", {
       session$flushReact()
 
       reorder(x, c("b", "a"))
-      x$a <- reactiveVal(3)
+      x["a"] <- reactiveVal(3)
+      x$b <- 4
       session$flushReact()
 
       expect_identical(runs, 1)
 
-      x$r <- reactiveVal(4)
+      x["r"] <- reactiveVal(4)
       session$flushReact()
 
       expect_identical(runs, 2)
 
-      x$a <- NULL
+      x["a"] <- NULL
       session$flushReact()
 
       expect_identical(runs, 3)
