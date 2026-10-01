@@ -78,6 +78,16 @@ y$count <- 2
 as_values(y)
 ```
 
+For a collection of computed values, `reactive_exprs()` is the counterpart. It only accepts reactive expressions, such as those that `reactive()`, `eventReactive()` or `debounce()` return, so none of its slots can be written. Assigning a value with `$<-` or `[[<-` is an error even where there is no slot, which keeps a stray value from adding one:
+
+```{r, error = TRUE}
+w <- reactive_exprs(double = reactive(2 * y$count))
+w$double
+
+w$triple <- 6
+names(w)
+```
+
 ## A collection is shared
 
 A collection is shared, as a `reactiveValues()` object is: after `z <- y`, both names refer to the same collection, and a change made through either is seen by everything holding it. That is what lets one part of an app change a collection while another part reacts to it. It is also why `reorder()` changes the collection it is given, rather than returning a reordered copy:
@@ -144,7 +154,7 @@ See the Dependencies section of `?reactives` for reads by position.
 
 ## In an app
 
-The app below lets the user add terms and remove them again, and it shows their total. Each term is a module, and each module binds a reactive returning its term's value to the collection that the app passes it. Since a collection is shared, the app sees every slot a module binds or removes.
+The app below lets the user add terms and remove them again, and it shows their total. Each term is a module, and each module binds a reactive returning its term's value to the collection that the app passes it. Since a collection is shared, the app sees every slot a module binds or removes. The terms are all computed, so the app keeps them in a `reactive_exprs()` collection, where a stray write such as `terms$extra <- 1` fails rather than adding a term to the total.
 
 ```{r}
 term_ui <- function(id) {
@@ -185,7 +195,7 @@ ui <- fluidPage(
 
 server <- function(input, output, session) {
 
-  terms <- reactives()
+  terms <- reactive_exprs()
 
   observeEvent(
     input$add,
@@ -208,7 +218,7 @@ shinyApp(ui, server)
 
 The total reads every slot's value, so it re-runs whenever a term is added, removed or changed, while a reader of `names(terms)` would re-run only when a term is added or removed.
 
-A collection belongs to the session or module it was created in, here the app's session, and is destroyed along with it. Changing it from a module doesn't tie it to that module. A reactive bound to a slot, however, belongs to the module that created it and is destroyed with that module, after which calling it fails. That is why each module removes its slot in `session$onDestroy()`, which runs however the module is destroyed, so that no reader of the collection calls a destroyed reactive. By contrast, the `reactiveVal()` that `$<-` or `[[<-` creates for a new slot belongs to the collection, whichever module writes the value.
+A collection belongs to the session or module it was created in, here the app's session, and is destroyed along with it. Changing it from a module doesn't tie it to that module. A reactive bound to a slot, however, belongs to the module that created it and is destroyed with that module, after which calling it fails. That is why each module removes its slot in `session$onDestroy()`, which runs however the module is destroyed, so that no reader of the collection calls a destroyed reactive. By contrast, in a collection that can be written, the `reactiveVal()` that `$<-` or `[[<-` creates for a new slot belongs to the collection, whichever module writes the value.
 
 ## Testing
 

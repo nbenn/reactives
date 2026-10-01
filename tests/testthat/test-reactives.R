@@ -1058,6 +1058,7 @@ test_that("reactive_vals() only accepts reactiveVal slots", {
       expect_s3_class(x, "reactives")
 
       expect_error(x["b"] <- reactive(2), class = "reactives_not_reactive_val")
+      expect_error(x["b"] <- 2, class = "reactives_not_reactive_val")
 
       x["b"] <- reactiveVal(2)
       expect_identical(x$b, 2)
@@ -1068,10 +1069,78 @@ test_that("reactive_vals() only accepts reactiveVal slots", {
   )
 })
 
-test_that("is_reactives() is TRUE for either kind of collection only", {
+test_that("reactive_exprs() only accepts reactive expressions", {
+
+  with_session(
+    {
+      x <- reactive_exprs(a = reactive(1), b = NULL)
+
+      expect_s3_class(x, "reactive_exprs")
+      expect_s3_class(x, "reactives")
+      expect_identical(names(x), "a")
+
+      expect_error(
+        x["b"] <- reactiveVal(2),
+        class = "reactives_not_reactive_expr"
+      )
+      expect_error(x["b"] <- 2, class = "reactives_not_reactive_expr")
+      expect_error(
+        reactive_exprs(a = reactiveVal(1)),
+        class = "reactives_not_reactive_expr"
+      )
+      expect_error(reactive_exprs(a = 1), class = "reactives_not_reactive_expr")
+
+      x["b"] <- reactive(2)
+      x["a"] <- NULL
+      expect_identical(as_values(x), list(b = 2))
+    }
+  )
+})
+
+test_that("reactive_exprs() takes each kind of reactive expression", {
+
+  with_session(
+    {
+      r <- reactiveVal(1)
+
+      x <- reactive_exprs(
+        reactive(r()),
+        eventReactive(r(), r()),
+        debounce(r, 10),
+        throttle(r, 10),
+        bindEvent(reactive(r()), r()),
+        bindCache(reactive(r()), r()),
+        reactivePoll(1000, session, r, r),
+        reactiveFileReader(1000, session, "file", readLines)
+      )
+
+      expect_identical(length(x), 8L)
+    }
+  )
+})
+
+test_that("no value can be written to a reactive_exprs collection", {
+
+  with_session(
+    {
+      x <- reactive_exprs(a = reactive(1), b = reactive(2))
+
+      expect_error(x$a <- 3, class = "reactives_not_reactive_val")
+      expect_error(x$c <- 3, class = "reactives_not_reactive_val")
+      expect_error(x[["c"]] <- NULL, class = "reactives_not_reactive_val")
+      expect_error(x[[1]] <- 3, class = "reactives_not_reactive_val")
+      expect_error(x[[3]] <- 3, class = "reactives_not_reactive_val")
+
+      expect_identical(as_values(x), list(a = 1, b = 2))
+    }
+  )
+})
+
+test_that("is_reactives() is TRUE for a collection of any kind only", {
 
   expect_true(is_reactives(reactives()))
   expect_true(is_reactives(reactive_vals(a = 1)))
+  expect_true(is_reactives(reactive_exprs()))
 
   expect_false(is_reactives(list()))
   expect_false(is_reactives(shiny::reactiveValues()))
@@ -1096,6 +1165,7 @@ test_that("reactlog labels each slot with the class and key", {
     {
       x <- reactives(reactiveVal(1), a = reactiveVal(2), reactiveVal(3))
       y <- reactive_vals(b = 1)
+      z <- reactive_exprs(c = reactive(1))
 
       isolate(
         {
@@ -1103,6 +1173,7 @@ test_that("reactlog labels each slot with the class and key", {
           x["a"]
           x[3]
           y["b"]
+          z["c"]
           as.list(x)
         }
       )
@@ -1114,7 +1185,7 @@ test_that("reactlog labels each slot with the class and key", {
       c(
         "names(reactives)", "reactives$a", "reactives$...1",
         "reactives$...2", "names(reactive_vals)", "reactive_vals$b",
-        "reactives[]"
+        "names(reactive_exprs)", "reactive_exprs$c", "reactives[]"
       ),
       labels
     ),
