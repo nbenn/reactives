@@ -24,51 +24,57 @@ reactiveConsole(TRUE)
 
 ## Slots hold reactives
 
-A collection holds reactives, such as a `reactiveVal()` for a stored value or a `reactive()` for a computed one, each in a slot of its own. Reading a slot returns its reactive, and calling that returns the value:
+A collection holds reactives, such as a `reactiveVal()` for a stored value or a `reactive()` for a computed one, each in a slot of its own. It has two levels, as a list does: the slots, and the values their reactives return. Reading with `$` or `[[` returns a slot's value, as on a `reactiveValues()` object, while reading with `[` returns the slot's reactive:
 
 ```{r}
 a <- reactiveVal(1)
 x <- reactives(a = a, b = reactive(2 * 21))
 
-identical(x$a, a)
-x$a()
-x[["b"]]()
+x$a
+x[["b"]]
+identical(x["a"], a)
 ```
 
-Assigning a reactive to a slot binds it, adding the slot or replacing its reactive, and assigning `NULL` removes the slot, as for a list:
+Assigning a reactive with `[<-` binds it, adding the slot or replacing its reactive, and assigning `NULL` with `[<-` removes the slot, as for a list:
 
 ```{r}
-x$c <- reactiveVal("new")
-x$b <- NULL
+x["c"] <- reactive(x$a + 1)
+x["b"] <- NULL
 names(x)
 ```
 
-Assigning any other value is an error, so that a stray value can't overwrite a computed slot:
+Assigning with `$<-` or `[[<-` writes a value instead, as on a `reactiveValues()` object. Where the slot holds a `reactiveVal()`, the value is written through it, so the slot keeps its reactive and code holding that `reactiveVal()` sees the new value. Where there is no slot, a new `reactiveVal()` holding the value is bound to it:
+
+```{r}
+x$a <- 10
+a()
+x$c
+
+x$d <- "new"
+x$d
+```
+
+Unlike on a list, assigning `NULL` with `$<-` or `[[<-` stores `NULL` rather than removing the slot, which only `[<-` does. A slot that stores `NULL` reads as `NULL` with `$`, as a missing slot does, but `[` tells the two apart, since the slot still has a reactive:
+
+```{r}
+x$d <- NULL
+names(x)
+is.null(x$d)
+is.null(x["d"])
+is.null(x["e"])
+```
+
+A slot holding a computed reactive can't be written, so that a stray value can't overwrite it. Replacing its reactive takes `[<-`:
 
 ```{r, error = TRUE}
-x$a <- 10
+x$c <- 5
 ```
 
-A new value is written through the slot's `reactiveVal()` instead:
-
-```{r}
-x$a(10)
-x$a()
-```
-
-A slot that doesn't exist reads as `NULL`, again as on a list. Since a slot holds a reactive rather than a value, that is not the same as a slot whose `reactiveVal()` holds `NULL`:
-
-```{r}
-x$d <- reactiveVal(NULL)
-is.null(x$d)
-is.null(x$d())
-is.null(x$e)
-```
-
-For a collection of stored values, `reactive_vals()` wraps each value it is given in a `reactiveVal()`. Such a collection only ever holds `reactiveVal()` slots, so code writing through its slots can rely on them being writable. The `slot_values()` function returns the value of every slot, as `reactiveValuesToList()` does for `reactiveValues()`:
+For a collection of stored values, `reactive_vals()` wraps each value it is given in a `reactiveVal()`. Such a collection only ever holds `reactiveVal()` slots, so each of its slots can be written, and code moving to it from a `reactiveValues()` object keeps its reads and writes with `$` and `[[`. The `slot_values()` function returns the value of every slot, as `reactiveValuesToList()` does for `reactiveValues()`:
 
 ```{r}
 y <- reactive_vals(count = 1, label = "one")
+y$count <- 2
 slot_values(y)
 ```
 
@@ -84,7 +90,7 @@ names(y)
 
 ## Each slot is a dependency of its own
 
-Reading a slot makes the reader depend on that slot alone: the reader re-runs when the slot is bound, replaced or removed, but not when another slot changes. A reader that calls the slot's reactive also depends on its value, as it would on any reactive. A `reactive()` that reports each computation shows this, since it only recomputes once something it read has changed:
+Reading a slot makes the reader depend on that slot alone: the reader re-runs when the slot is bound, replaced or removed, but not when another slot changes. Reading the slot's value with `$` or `[[` also makes the reader depend on the value, as calling the slot's reactive does. A `reactive()` that reports each computation shows this, since it only recomputes once something it read has changed:
 
 ```{r}
 x <- reactive_vals(a = 1, b = 2)
@@ -92,24 +98,24 @@ x <- reactive_vals(a = 1, b = 2)
 a_doubled <- reactive(
   {
     message("Computing a_doubled")
-    2 * x$a()
+    2 * x$a
   }
 )
 
 a_doubled()
 
-x$b(3)
-x$c <- reactiveVal(4)
+x$b <- 3
+x$c <- 4
 reorder(x, c("c", "b", "a"))
 a_doubled()
 
-x$a(5)
+x$a <- 5
 a_doubled()
 ```
 
-A reader of a slot that doesn't exist yet gets `NULL`, and it re-runs once the slot is added. Once a slot is removed, its readers re-run and get `NULL` in turn, and calling that fails. A reader that expects the slot to go can stop quietly instead, with `req(x$a)()`.
+A reader of a slot that doesn't exist yet gets `NULL`, and it re-runs once the slot is added. Once a slot is removed, its readers re-run and get `NULL` in turn.
 
-Testing whether a slot exists by looking for its name in `names(x)` would re-run the reader whenever a slot is added, removed or moved. The `has_slot()` function tests for slots with the same dependencies as reading them:
+Testing whether a slot exists by looking for its name in `names(x)` would re-run the reader whenever a slot is added, removed or moved. The `has_slot()` function tests for slots with the same dependencies as reading their reactives with `[`:
 
 ```{r}
 has_slot(x, c("a", "d"))
@@ -127,10 +133,10 @@ slot_names <- reactive(
 
 slot_names()
 
-x$a(6)
+x$a <- 6
 slot_names()
 
-x$b <- NULL
+x["b"] <- NULL
 slot_names()
 ```
 
@@ -157,8 +163,8 @@ term_server <- function(id, terms) {
     id,
     function(input, output, session) {
 
-      terms[[id]] <- reactive(input$value)
-      session$onDestroy(function() terms[[id]] <- NULL)
+      terms[id] <- reactive(input$value)
+      session$onDestroy(function() terms[id] <- NULL)
 
       observeEvent(
         input$remove,
@@ -202,7 +208,7 @@ shinyApp(ui, server)
 
 The total reads every slot's value, so it re-runs whenever a term is added, removed or changed, while a reader of `names(terms)` would re-run only when a term is added or removed.
 
-A collection belongs to the session or module it was created in, here the app's session, and is destroyed along with it. Changing it from a module doesn't tie it to that module. A reactive bound to a slot, however, belongs to the module that created it and is destroyed with that module, after which calling it fails. That is why each module removes its slot in `session$onDestroy()`, which runs however the module is destroyed, so that no reader of the collection calls a destroyed reactive.
+A collection belongs to the session or module it was created in, here the app's session, and is destroyed along with it. Changing it from a module doesn't tie it to that module. A reactive bound to a slot, however, belongs to the module that created it and is destroyed with that module, after which calling it fails. That is why each module removes its slot in `session$onDestroy()`, which runs however the module is destroyed, so that no reader of the collection calls a destroyed reactive. By contrast, the `reactiveVal()` that `$<-` or `[[<-` creates for a new slot belongs to the collection, whichever module writes the value.
 
 ## Testing
 

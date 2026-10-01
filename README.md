@@ -44,24 +44,34 @@ reactiveConsole(TRUE)
 
 x <- reactives(a = reactiveVal(1), b = reactive(2 * 21))
 
-# Reading a slot returns its reactive; call it for the value
-x$a()
+# Reading with `$` or `[[` returns a slot's value, as on reactiveValues()
+x$a
 #> [1] 1
+x[["b"]]
+#> [1] 42
 
 # A slot that doesn't exist reads as NULL, as on a list
 is.null(x$c)
 #> [1] TRUE
 
-# Assigning a reactive adds or replaces a slot, and assigning NULL removes it
-x$c <- reactiveVal("new")
-x$a <- NULL
+# Assigning a value writes it to the slot, adding the slot if there is none
+x$a <- 10
+x$c <- "new"
+
+# With `[`, a slot's reactive is read, bound or removed
+is.reactive(x["a"])
+#> [1] TRUE
+x["d"] <- reactive(x$a + 1)
+x["b"] <- NULL
 names(x)
-#> [1] "b" "c"
+#> [1] "a" "c" "d"
 ```
 
 Inside an observer or a `reactive()`, reading a slot creates a
-dependency on that slot alone. The reader re-runs when that slot is
-added, replaced or removed, but not when other slots change.
+dependency on that slot alone, and reading its value with `$` or `[[`
+one on the value as well. The reader re-runs when that slot is added,
+replaced or removed, or when the value it read changes, but not when
+other slots change.
 
 ## Status
 
