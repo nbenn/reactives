@@ -15,7 +15,7 @@ test_that("a snapshot outlives the module it was taken in", {
       expect_error(res$x["a"], class = "shiny.destroyed.error")
 
       expect_identical(names(res$snap), c("a", "b", ""))
-      expect_identical(slot_values(res$snap), list(a = 1, b = 2, 3))
+      expect_identical(as_values(res$snap), list(a = 1, b = 2, 3))
     }
   )
 })
@@ -33,8 +33,8 @@ test_that("a snapshot holds the current values apart from the original", {
       snap$b <- 20
       x["c"] <- reactiveVal(3)
 
-      expect_identical(slot_values(snap), list(a = 1, b = 20))
-      expect_identical(slot_values(x), list(a = 10, b = 2, c = 3))
+      expect_identical(as_values(snap), list(a = 1, b = 20))
+      expect_identical(as_values(x), list(a = 10, b = 2, c = 3))
     }
   )
 })

@@ -5,8 +5,8 @@
 \alias{reactive_vals}
 \alias{reorder.reactives}
 \alias{is_reactives}
-\alias{slot_values}
-\alias{has_slot}
+\alias{as_values}
+\alias{has_key}
 \alias{snapshot_reactives}
 \title{Keyed collections of reactives}
 \usage{
@@ -18,9 +18,9 @@ reactive_vals(...)
 
 is_reactives(x)
 
-slot_values(x)
+as_values(x)
 
-has_slot(x, key)
+has_key(x, key)
 
 snapshot_reactives(x)
 }
@@ -41,9 +41,9 @@ missing.}
 \value{
 A \code{reactives} object, or for \code{reactive_vals()} a \code{reactive_vals}
 object, which is also a \code{reactives} object. A snapshot has the class of
-\code{x}. The \code{reorder()} method returns \code{x}, invisibly, \code{slot_values()}
+\code{x}. The \code{reorder()} method returns \code{x}, invisibly, \code{as_values()}
 returns a list of the slots' values, in slot order and named as by
-\code{as.list()}, \code{has_slot()} returns a logical vector with one element per
+\code{as.list()}, \code{has_key()} returns a logical vector with one element per
 name in \code{key}, and \code{is_reactives()} returns \code{TRUE} or \code{FALSE}.
 }
 \description{
@@ -65,11 +65,11 @@ reactive. As on a list, a name with no slot reads as \code{NULL}, while a
 position past the last slot is an error. A slot whose \code{\link[shiny:reactiveVal]{shiny::reactiveVal()}}
 stores \code{NULL} reads as \code{NULL} with \code{$} and \code{[[} too, but not with \code{[}, which
 tells it apart from a missing slot. To test for slots by name, use
-\code{has_slot()}.
+\code{has_key()}.
 
 Each read takes a single name or position. Take the reactives of several
 slots from \code{as.list(x)[i]} instead, or get the value of every slot at once
-with \code{slot_values()}, as \code{\link[shiny:reactiveValuesToList]{shiny::reactiveValuesToList()}} does for a
+with \code{as_values()}, as \code{\link[shiny:reactiveValuesToList]{shiny::reactiveValuesToList()}} does for a
 \code{\link[shiny:reactiveValues]{shiny::reactiveValues()}} object. Going through the slots' reactives works
 with \code{lapply()} and \code{vapply()}, which call \code{as.list()}, while \code{Map()} reads
 the slots by position with \code{[[} and so goes through their values. A \code{for}
@@ -134,7 +134,7 @@ removed, but not when other slots change. This also holds for a slot that
 does not exist yet, so a reader re-runs once the slot is added. Reading the
 slot's value, as in \code{x$a} or \code{x[["a"]]}, depends on the slot and on its
 value, as calling its reactive does, so the caller also re-runs when the
-value changes. Testing for slots with \code{has_slot()} has the same
+value changes. Testing for slots with \code{has_key()} has the same
 dependencies as reading their reactives by name, while testing with
 \code{"a" \%in\% names(x)} depends on what \code{names()} depends on, so the caller
 re-runs whenever a slot is added, removed or moved.
@@ -146,8 +146,8 @@ and \code{x[[1]]} also on its value, so the caller re-runs whenever a slot is
 added, removed or moved, even if the slot at its position stays the same.
 Reading past the last slot fails, and the caller re-runs on the same
 changes. The \code{as.list()} method depends on what \code{names()} depends on and on
-every slot, and \code{slot_values()} also on every slot's value. Reordering
-re-runs readers of \code{names()}, \code{as.list()}, \code{slot_values()} and of slots by
+every slot, and \code{as_values()} also on every slot's value. Reordering
+re-runs readers of \code{names()}, \code{as.list()}, \code{as_values()} and of slots by
 position, but not readers of \code{length()} or of slots by name.
 
 To depend on the slot at a position alone, read it through a
@@ -201,12 +201,12 @@ shiny::isolate(x[["b"]])
 # Assigning a value writes it, adding a slot if there is none
 x$a <- 2
 x$c <- NULL
-shiny::isolate(slot_values(x))
+shiny::isolate(as_values(x))
 
 # A stored NULL reads as NULL, but `[` finds the slot's reactive
 shiny::isolate(is.null(x$c))
 shiny::isolate(is.null(x["c"]))
-shiny::isolate(has_slot(x, c("c", "d")))
+shiny::isolate(has_key(x, c("c", "d")))
 
 # Assigning a reactive with `[<-` binds it, and assigning NULL removes a slot
 x["d"] <- shiny::reactive(10 * x$a)
@@ -222,7 +222,7 @@ z <- y
 reorder(y, c("label", "n"))
 shiny::isolate(names(z))
 
-shiny::isolate(slot_values(y))
+shiny::isolate(as_values(y))
 is_reactives(y)
 
 # A snapshot outlives the session it was taken in

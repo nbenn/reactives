@@ -70,12 +70,12 @@ A slot holding a computed reactive can't be written, so that a stray value can't
 x$c <- 5
 ```
 
-For a collection of stored values, `reactive_vals()` wraps each value it is given in a `reactiveVal()`. Such a collection only ever holds `reactiveVal()` slots, so each of its slots can be written, and code moving to it from a `reactiveValues()` object keeps its reads and writes with `$` and `[[`. The `slot_values()` function returns the value of every slot, as `reactiveValuesToList()` does for `reactiveValues()`:
+For a collection of stored values, `reactive_vals()` wraps each value it is given in a `reactiveVal()`. Such a collection only ever holds `reactiveVal()` slots, so each of its slots can be written, and code moving to it from a `reactiveValues()` object keeps its reads and writes with `$` and `[[`. The `as_values()` function returns the value of every slot, as `reactiveValuesToList()` does for `reactiveValues()`:
 
 ```{r}
 y <- reactive_vals(count = 1, label = "one")
 y$count <- 2
-slot_values(y)
+as_values(y)
 ```
 
 ## A collection is shared
@@ -115,13 +115,13 @@ a_doubled()
 
 A reader of a slot that doesn't exist yet gets `NULL`, and it re-runs once the slot is added. Once a slot is removed, its readers re-run and get `NULL` in turn.
 
-Testing whether a slot exists by looking for its name in `names(x)` would re-run the reader whenever a slot is added, removed or moved. The `has_slot()` function tests for slots with the same dependencies as reading their reactives with `[`:
+Testing whether a slot exists by looking for its name in `names(x)` would re-run the reader whenever a slot is added, removed or moved. The `has_key()` function tests for slots with the same dependencies as reading their reactives with `[`:
 
 ```{r}
-has_slot(x, c("a", "d"))
+has_key(x, c("a", "d"))
 ```
 
-Other reads depend on what they return. The `length()` method depends on the number of slots alone, `names()` on which slots exist and their order, and `slot_values()` on all of that and on every slot and its value. A reader that lists the slots, for example to offer them as choices, re-runs when a slot is added, removed or moved, but not when a value changes:
+Other reads depend on what they return. The `length()` method depends on the number of slots alone, `names()` on which slots exist and their order, and `as_values()` on all of that and on every slot and its value. A reader that lists the slots, for example to offer them as choices, re-runs when a slot is added, removed or moved, but not when a value changes:
 
 ```{r}
 slot_names <- reactive(
@@ -197,7 +197,7 @@ server <- function(input, output, session) {
   )
 
   output$total <- renderText(
-    paste("Total:", sum(unlist(slot_values(terms))))
+    paste("Total:", sum(unlist(as_values(terms))))
   )
 }
 ```
@@ -229,5 +229,5 @@ testServer(
   }
 )
 
-slot_values(snap)
+as_values(snap)
 ```
