@@ -483,19 +483,6 @@ get_value <- function(x, key) {
 
 check_slot <- function(x, value) {
 
-  # This comes first because the message for a value that isn't a reactive
-  # points to writing it, which a `reactive_exprs` collection refuses.
-  if (inherits(x, "reactive_exprs") && !inherits(value, "reactiveExpr")) {
-    abort(
-      paste(
-        "A `reactive_exprs` collection only holds reactive expressions, such",
-        "as `reactive()` objects. Use `reactives()` for a collection that also",
-        "holds other reactives."
-      ),
-      "reactives_not_reactive_expr"
-    )
-  }
-
   if (!is.reactive(value)) {
     abort(
       paste(
@@ -514,6 +501,17 @@ check_slot <- function(x, value) {
         "Use `reactives()` for a collection that also holds other reactives."
       ),
       "reactives_not_reactive_val"
+    )
+  }
+
+  if (inherits(x, "reactive_exprs") && !inherits(value, "reactiveExpr")) {
+    abort(
+      paste(
+        "A `reactive_exprs` collection only holds reactive expressions, such",
+        "as `reactive()` objects. Use `reactives()` for a collection that also",
+        "holds other reactives."
+      ),
+      "reactives_not_reactive_expr"
     )
   }
 
