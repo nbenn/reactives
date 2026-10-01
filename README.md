@@ -14,16 +14,18 @@ and reordered, with dependencies tracked per key.
 
 Shiny’s reactive building blocks leave a gap:
 
-|          | A single one    | A keyed collection |
-|----------|-----------------|--------------------|
-| Stored   | `reactiveVal()` | `reactiveValues()` |
-| Computed | `reactive()`    | none               |
+|          | A single one    | A keyed collection | In this package    |
+|----------|-----------------|--------------------|--------------------|
+| Stored   | `reactiveVal()` | `reactiveValues()` | `reactive_vals()`  |
+| Computed | `reactive()`    | none               | `reactive_exprs()` |
 
 A `reactiveValues()` object can gain keys, but it can’t remove or
 reorder them
 ([rstudio/shiny#2439](https://github.com/rstudio/shiny/issues/2439)),
-and shiny has no keyed collection of computed values. This package
-provides a collection that fills both gaps.
+and shiny has no keyed collection of computed values. This package fills
+both gaps with collections whose keys can be added, removed and
+reordered: `reactive_vals()` for stored values, `reactive_exprs()` for
+computed ones, and `reactives()` for both kinds at once.
 
 ## Background
 

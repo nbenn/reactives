@@ -3,6 +3,7 @@
 \name{reactives}
 \alias{reactives}
 \alias{reactive_vals}
+\alias{reactive_exprs}
 \alias{reorder.reactives}
 \alias{is_reactives}
 \alias{as_values}
@@ -13,6 +14,8 @@
 reactives(...)
 
 reactive_vals(...)
+
+reactive_exprs(...)
 
 \method{reorder}{reactives}(x, order, ...)
 
@@ -25,10 +28,10 @@ has_key(x, key)
 snapshot_reactives(x)
 }
 \arguments{
-\item{...}{For \code{reactives()} and \code{reactive_vals()}, the slots to hold, named
-or unnamed: reactives, with \code{NULL} entries dropped, for \code{reactives()}, and
-any values, including \code{NULL}, for \code{reactive_vals()}. Ignored by
-\code{reorder()}.}
+\item{...}{For \code{reactives()}, \code{reactive_vals()} and \code{reactive_exprs()}, the
+slots to hold, named or unnamed: reactives for \code{reactives()} and reactive
+expressions for \code{reactive_exprs()}, with \code{NULL} entries dropped, and any
+values, including \code{NULL}, for \code{reactive_vals()}. Ignored by \code{reorder()}.}
 
 \item{x}{A \code{reactives} object, or for \code{is_reactives()}, any object.}
 
@@ -39,12 +42,12 @@ by name when all slots are named.}
 missing.}
 }
 \value{
-A \code{reactives} object, or for \code{reactive_vals()} a \code{reactive_vals}
-object, which is also a \code{reactives} object. A snapshot has the class of
-\code{x}. The \code{reorder()} method returns \code{x}, invisibly, \code{as_values()}
-returns a list of the slots' values, in slot order and named as by
-\code{as.list()}, \code{has_key()} returns a logical vector with one element per
-name in \code{key}, and \code{is_reactives()} returns \code{TRUE} or \code{FALSE}.
+A \code{reactives} object, or for \code{reactive_vals()} and \code{reactive_exprs()}
+an object of that class, which is also a \code{reactives} object. A snapshot
+has the class of \code{x}. The \code{reorder()} method returns \code{x}, invisibly,
+\code{as_values()} returns a list of the slots' values, in slot order and named
+as by \code{as.list()}, \code{has_key()} returns a logical vector with one element
+per name in \code{key}, and \code{is_reactives()} returns \code{TRUE} or \code{FALSE}.
 }
 \description{
 A \code{reactives} object is a keyed collection of shiny reactives, such as
@@ -53,8 +56,12 @@ removed and reordered, and each slot is tracked as its own reactive
 dependency. The \code{reactive_vals()} constructor creates a collection whose
 slots are \code{\link[shiny:reactiveVal]{shiny::reactiveVal()}} objects holding the given values, and which
 only accepts \code{\link[shiny:reactiveVal]{shiny::reactiveVal()}} slots, so code writing through its slots
-can rely on them being writable. To test whether an object is a collection
-of either kind, use \code{is_reactives()}.
+can rely on them being writable. Its counterpart, \code{reactive_exprs()},
+creates a collection that only accepts reactive expressions, the reactives
+of class \code{reactiveExpr} that \code{\link[shiny:reactive]{shiny::reactive()}}, \code{\link[shiny:eventReactive]{shiny::eventReactive()}},
+\code{\link[shiny:debounce]{shiny::debounce()}} and the like return, so that none of its slots can be
+written. To test whether an object is a collection of any kind, use
+\code{is_reactives()}.
 }
 \details{
 A collection has two levels, as a list does: the slots, and the values
@@ -89,9 +96,12 @@ reactive included, and unlike on a list, assigning \code{NULL} with \verb{$<-} o
 \verb{[[<-} stores \code{NULL} rather than removing the slot. A slot holding a
 reactive expression, such as a \code{\link[shiny:reactive]{shiny::reactive()}}, can't be written, so
 that a stray value can't overwrite it; replacing its reactive takes \verb{[<-}.
-As with reading, each assignment takes a single name or position. Slots can
-be unnamed; append one with \code{x[length(x) + 1] <- r} for a reactive \code{r}, or
-with \code{x[[length(x) + 1]] <- value} for a value.
+A \code{reactive_exprs} collection only holds such slots, and assigning a value
+to it with \verb{$<-} or \verb{[[<-} is an error even where there is no slot, so that
+a stray value can't add one either. As with reading, each assignment takes a
+single name or position. Slots can be unnamed; append one with
+\code{x[length(x) + 1] <- r} for a reactive \code{r}, or with
+\code{x[[length(x) + 1]] <- value} for a value.
 
 Renaming with \verb{names<-} is an error, as it is for a
 \code{\link[shiny:reactiveValues]{shiny::reactiveValues()}} object. To rename a slot, bind its reactive under
@@ -174,9 +184,9 @@ work as they would inside \code{\link[shiny:isolate]{shiny::isolate()}} rather t
 \section{Reactlog}{
 
 In \href{https://rstudio.github.io/reactlog/}{reactlog}, the dependency on slot
-\code{a} shows as \code{reactives$a}, or as \code{reactive_vals$a} in a \code{reactive_vals}
-collection, the one on which slots exist and in what order as
-\code{names(reactives)}, and the one on their number as \code{length(reactives)}.
+\code{a} shows as \code{reactives$a}, or as \code{reactive_vals$a} or \code{reactive_exprs$a} in
+a collection of that class, the one on which slots exist and in what order
+as \code{names(reactives)}, and the one on their number as \code{length(reactives)}.
 Unnamed slots show as \code{reactives$...1}, \code{reactives$...2} and so on, numbered
 in the order they were added rather than by position, so a label survives
 reordering. A read of every slot at once, such as \code{as.list()}, shows a
@@ -224,6 +234,11 @@ shiny::isolate(names(z))
 
 shiny::isolate(as_values(y))
 is_reactives(y)
+
+# A value can't be written to a collection of reactive expressions
+w <- reactive_exprs(twice = shiny::reactive(2 * y$n))
+shiny::isolate(w$twice)
+try(w$thrice <- 3)
 
 # A snapshot outlives the session it was taken in
 snap <- NULL

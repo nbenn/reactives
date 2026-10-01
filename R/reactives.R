@@ -6,8 +6,12 @@
 #' dependency. The `reactive_vals()` constructor creates a collection whose
 #' slots are [shiny::reactiveVal()] objects holding the given values, and which
 #' only accepts [shiny::reactiveVal()] slots, so code writing through its slots
-#' can rely on them being writable. To test whether an object is a collection
-#' of either kind, use `is_reactives()`.
+#' can rely on them being writable. Its counterpart, `reactive_exprs()`,
+#' creates a collection that only accepts reactive expressions, the reactives
+#' of class `reactiveExpr` that [shiny::reactive()], [shiny::eventReactive()],
+#' [shiny::debounce()] and the like return, so that none of its slots can be
+#' written. To test whether an object is a collection of any kind, use
+#' `is_reactives()`.
 #'
 #' A collection has two levels, as a list does: the slots, and the values
 #' their reactives return. Reading with `$` or `[[`, as in `x$a`, `x[["a"]]` or
@@ -41,9 +45,12 @@
 #' `[[<-` stores `NULL` rather than removing the slot. A slot holding a
 #' reactive expression, such as a [shiny::reactive()], can't be written, so
 #' that a stray value can't overwrite it; replacing its reactive takes `[<-`.
-#' As with reading, each assignment takes a single name or position. Slots can
-#' be unnamed; append one with `x[length(x) + 1] <- r` for a reactive `r`, or
-#' with `x[[length(x) + 1]] <- value` for a value.
+#' A `reactive_exprs` collection only holds such slots, and assigning a value
+#' to it with `$<-` or `[[<-` is an error even where there is no slot, so that
+#' a stray value can't add one either. As with reading, each assignment takes a
+#' single name or position. Slots can be unnamed; append one with
+#' `x[length(x) + 1] <- r` for a reactive `r`, or with
+#' `x[[length(x) + 1]] <- value` for a value.
 #'
 #' Renaming with `names<-` is an error, as it is for a
 #' [shiny::reactiveValues()] object. To rename a slot, bind its reactive under
@@ -119,9 +126,9 @@
 #'
 #' @section Reactlog:
 #' In [reactlog](https://rstudio.github.io/reactlog/), the dependency on slot
-#' `a` shows as `reactives$a`, or as `reactive_vals$a` in a `reactive_vals`
-#' collection, the one on which slots exist and in what order as
-#' `names(reactives)`, and the one on their number as `length(reactives)`.
+#' `a` shows as `reactives$a`, or as `reactive_vals$a` or `reactive_exprs$a` in
+#' a collection of that class, the one on which slots exist and in what order
+#' as `names(reactives)`, and the one on their number as `length(reactives)`.
 #' Unnamed slots show as `reactives$...1`, `reactives$...2` and so on, numbered
 #' in the order they were added rather than by position, so a label survives
 #' reordering. A read of every slot at once, such as `as.list()`, shows a
@@ -137,17 +144,17 @@
 #' and stays with the [shiny::reactiveVal()] if that is later bound to another
 #' slot.
 #'
-#' @param ... For `reactives()` and `reactive_vals()`, the slots to hold, named
-#'   or unnamed: reactives, with `NULL` entries dropped, for `reactives()`, and
-#'   any values, including `NULL`, for `reactive_vals()`. Ignored by
-#'   `reorder()`.
+#' @param ... For `reactives()`, `reactive_vals()` and `reactive_exprs()`, the
+#'   slots to hold, named or unnamed: reactives for `reactives()` and reactive
+#'   expressions for `reactive_exprs()`, with `NULL` entries dropped, and any
+#'   values, including `NULL`, for `reactive_vals()`. Ignored by `reorder()`.
 #'
-#' @return A `reactives` object, or for `reactive_vals()` a `reactive_vals`
-#'   object, which is also a `reactives` object. A snapshot has the class of
-#'   `x`. The `reorder()` method returns `x`, invisibly, `as_values()`
-#'   returns a list of the slots' values, in slot order and named as by
-#'   `as.list()`, `has_key()` returns a logical vector with one element per
-#'   name in `key`, and `is_reactives()` returns `TRUE` or `FALSE`.
+#' @return A `reactives` object, or for `reactive_vals()` and `reactive_exprs()`
+#'   an object of that class, which is also a `reactives` object. A snapshot
+#'   has the class of `x`. The `reorder()` method returns `x`, invisibly,
+#'   `as_values()` returns a list of the slots' values, in slot order and named
+#'   as by `as.list()`, `has_key()` returns a logical vector with one element
+#'   per name in `key`, and `is_reactives()` returns `TRUE` or `FALSE`.
 #'
 #' @examples
 #' x <- reactives(a = shiny::reactiveVal(1), b = shiny::reactive(2 * 21))
@@ -181,6 +188,11 @@
 #' shiny::isolate(as_values(y))
 #' is_reactives(y)
 #'
+#' # A value can't be written to a collection of reactive expressions
+#' w <- reactive_exprs(twice = shiny::reactive(2 * y$n))
+#' shiny::isolate(w$twice)
+#' try(w$thrice <- 3)
+#'
 #' # A snapshot outlives the session it was taken in
 #' snap <- NULL
 #' shiny::testServer(
@@ -203,6 +215,12 @@ reactives <- function(...) {
 #' @export
 reactive_vals <- function(...) {
   build_reactives(list(...), c("reactive_vals", "reactives"), values = TRUE)
+}
+
+#' @rdname reactives
+#' @export
+reactive_exprs <- function(...) {
+  build_reactives(list(...), c("reactive_exprs", "reactives"))
 }
 
 #' @param x A `reactives` object, or for `is_reactives()`, any object.
@@ -465,6 +483,19 @@ get_value <- function(x, key) {
 
 check_slot <- function(x, value) {
 
+  # This comes first because the message for a value that isn't a reactive
+  # points to writing it, which a `reactive_exprs` collection refuses.
+  if (inherits(x, "reactive_exprs") && !inherits(value, "reactiveExpr")) {
+    abort(
+      paste(
+        "A `reactive_exprs` collection only holds reactive expressions, such",
+        "as `reactive()` objects. Use `reactives()` for a collection that also",
+        "holds other reactives."
+      ),
+      "reactives_not_reactive_expr"
+    )
+  }
+
   if (!is.reactive(value)) {
     abort(
       paste(
@@ -489,9 +520,20 @@ check_slot <- function(x, value) {
   invisible(value)
 }
 
-check_writable <- function(slot) {
+check_writable <- function(x, slot) {
 
-  if (!inherits(slot, "reactiveVal")) {
+  if (inherits(x, "reactive_exprs")) {
+    abort(
+      paste(
+        "A value can't be written to a `reactive_exprs` collection, which only",
+        "holds reactive expressions. Bind a reactive expression to the slot",
+        "with `[<-` instead."
+      ),
+      "reactives_not_reactive_val"
+    )
+  }
+
+  if (!is.null(slot) && !inherits(slot, "reactiveVal")) {
     abort(
       paste(
         "A slot holding a reactive expression can't be written. Bind a",
@@ -602,13 +644,14 @@ assign_slot <- function(x, key, value) {
 write_value <- function(x, key, value) {
 
   check_lifetime(x)
+
   slot <- peek_slot(x, key)
+  check_writable(x, slot)
 
   if (is.null(slot)) {
     return(bind_slot(x, key, new_cell(x, value, value_label(x, key))))
   }
 
-  check_writable(slot)
   slot(value)
 
   x

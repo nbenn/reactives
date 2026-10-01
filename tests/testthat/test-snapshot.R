@@ -39,6 +39,20 @@ test_that("a snapshot holds the current values apart from the original", {
   )
 })
 
+test_that("a snapshot of reactive expressions keeps its class", {
+
+  with_session(
+    {
+      x <- reactive_exprs(a = reactive(1), b = eventReactive(TRUE, 2))
+      snap <- snapshot_reactives(x)
+
+      expect_s3_class(snap, "reactive_exprs")
+      expect_identical(as_values(snap), list(a = 1, b = 2))
+      expect_error(snap$a <- 3, class = "reactives_not_reactive_val")
+    }
+  )
+})
+
 test_that("a snapshot keeps the kind of each slot and replays its errors", {
 
   with_session(
