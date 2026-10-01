@@ -48,9 +48,13 @@
 #' A `reactive_exprs` collection only holds such slots, and assigning a value
 #' to it with `$<-` or `[[<-` is an error even where there is no slot, so that
 #' a stray value can't add one either. As with reading, each assignment takes a
-#' single name or position. Slots can be unnamed; append one with
-#' `x[length(x) + 1] <- r` for a reactive `r`, or with
-#' `x[[length(x) + 1]] <- value` for a value.
+#' single name or position.
+#'
+#' Slots can be unnamed. To append one, bind a reactive `r` with
+#' `append_reactive(x, r)`, or write a value with `append_value(x, value)`,
+#' which binds a new [shiny::reactiveVal()] holding it. The checks are those of
+#' binding and writing, so `append_value()` is an error for a `reactive_exprs`
+#' collection.
 #'
 #' Renaming with `names<-` is an error, as it is for a
 #' [shiny::reactiveValues()] object. To rename a slot, bind its reactive under
@@ -59,8 +63,9 @@
 #' @section Sharing:
 #' A collection is shared, like [shiny::reactiveValues()]: after `y <- x`, both
 #' names refer to the same collection, and a change made through `[<-`, `$<-`,
-#' `[[<-` or `reorder()` is seen by everything holding it. That is what lets
-#' one part of an app change a collection while another reacts to it.
+#' `[[<-`, `reorder()`, `append_reactive()` or `append_value()` is seen by
+#' everything holding it. That is what lets one part of an app change a
+#' collection while another reacts to it.
 #'
 #' @section Lifetime:
 #' A collection belongs to the session or module it was created in and is
@@ -68,8 +73,8 @@
 #' it from another module doesn't tie it to that module, so destroying the
 #' module leaves the collection intact. A reactive bound to a slot, however,
 #' still belongs to the module it was created in, while the
-#' [shiny::reactiveVal()] that `$<-` or `[[<-` creates for a new slot belongs to
-#' the collection, whichever module writes the value.
+#' [shiny::reactiveVal()] that `$<-`, `[[<-` or `append_value()` creates for a
+#' new slot belongs to the collection, whichever module writes the value.
 #'
 #' To keep reading a collection after its [shiny::testServer()] session has
 #' closed, a test can take a snapshot with `snapshot_reactives()` while the
@@ -112,11 +117,18 @@
 #' check on `length()` keeps the observer from failing on an empty collection,
 #' which in an app would end the session.
 #'
-#' Binding, removing and writing make the caller depend on nothing. Writing a
-#' value through a slot's [shiny::reactiveVal()] leaves the slot bound to it,
-#' so the write re-runs only the readers of the slot's value, and only if the
-#' value changes. Writing a value where there is no slot binds a new one and
-#' re-runs readers as any binding does.
+#' Binding, removing and writing make the caller depend on nothing, and so does
+#' appending with `append_reactive()` or `append_value()`. Writing a value
+#' through a slot's [shiny::reactiveVal()] leaves the slot bound to it, so the
+#' write re-runs only the readers of the slot's value, and only if the value
+#' changes. Writing a value where there is no slot binds a new one and re-runs
+#' readers as any binding does.
+#'
+#' Assigning one past the last slot, as in `x[length(x) + 1] <- r` or
+#' `x[[length(x) + 1]] <- value`, appends as well, but the call to `length()`
+#' makes the caller depend on the number of slots, which the append then
+#' changes. An observer that appends this way re-runs after each append and
+#' appends again, without end.
 #'
 #' Printing, `format()` and `str()` make the caller depend on nothing, and they
 #' never call a slot, so they run no computed slot. Taking a snapshot also
@@ -136,8 +148,9 @@
 #' slot only appears once it has been read, and the one for the number of
 #' slots once `length()` has been called.
 #'
-#' Each [shiny::reactiveVal()] that `reactive_vals()`, `$<-` or `[[<-` creates
-#' for a value shows as the label of its slot followed by `()`,
+#' Each [shiny::reactiveVal()] that `reactive_vals()`, `$<-`, `[[<-` or
+#' `append_value()` creates for a value shows as the label of its slot followed
+#' by `()`,
 #' `reactive_vals$a()` for slot `a` and `reactive_vals$...1()` for the first
 #' unnamed slot, and the error for calling it once its module is destroyed
 #' names it the same way. The label names the slot the value was created for,
@@ -151,10 +164,11 @@
 #'
 #' @return A `reactives` object, or for `reactive_vals()` and `reactive_exprs()`
 #'   an object of that class, which is also a `reactives` object. A snapshot
-#'   has the class of `x`. The `reorder()` method returns `x`, invisibly,
-#'   `as_values()` returns a list of the slots' values, in slot order and named
-#'   as by `as.list()`, `has_key()` returns a logical vector with one element
-#'   per name in `key`, and `is_reactives()` returns `TRUE` or `FALSE`.
+#'   has the class of `x`. The `reorder()` method returns `x`, invisibly, and so
+#'   do `append_reactive()` and `append_value()`. The `as_values()` function
+#'   returns a list of the slots' values, in slot order and named as by
+#'   `as.list()`, `has_key()` returns a logical vector with one element per
+#'   name in `key`, and `is_reactives()` returns `TRUE` or `FALSE`.
 #'
 #' @examples
 #' x <- reactives(a = shiny::reactiveVal(1), b = shiny::reactive(2 * 21))
@@ -176,6 +190,11 @@
 #' x["b"] <- NULL
 #' shiny::isolate(names(x))
 #' shiny::isolate(x$d)
+#'
+#' # Appending adds an unnamed slot
+#' append_value(x, 3)
+#' append_reactive(x, shiny::reactive(x$a + 1))
+#' shiny::isolate(as_values(x))
 #'
 #' y <- reactive_vals(n = 1, label = "one")
 #' shiny::isolate(y$label)
@@ -248,6 +267,30 @@ reorder.reactives <- function(x, order, ...) {
   }
 
   set_keys(x, keys[positions])
+
+  invisible(x)
+}
+
+#' @param value For `append_reactive()`, the reactive to bind to the new slot,
+#'   and for `append_value()`, the value for the new slot's
+#'   [shiny::reactiveVal()] to hold.
+#'
+#' @rdname reactives
+#' @export
+append_reactive <- function(x, value) {
+
+  check_collection(x)
+  bind_slot(x, next_positional_key(x), value)
+
+  invisible(x)
+}
+
+#' @rdname reactives
+#' @export
+append_value <- function(x, value) {
+
+  check_collection(x)
+  write_value(x, next_positional_key(x), value)
 
   invisible(x)
 }
