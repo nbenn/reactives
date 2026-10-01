@@ -633,11 +633,12 @@ test_that("writing creates a slot's reactiveVal in the collection's session", {
         function(input, output, session) {
           x$a <- 1
           x[[2]] <- 2
+          append_value(x, 3)
         }
       )
       session$destroy("child")
 
-      expect_identical(as_values(x), list(a = 1, 2))
+      expect_identical(as_values(x), list(a = 1, 2, 3))
     }
   )
 })
@@ -728,6 +729,88 @@ test_that("assigning one past the end appends an unnamed slot", {
 
       expect_identical(names(x), c("a", "", "", ""))
       expect_identical(as_values(x), list(a = 1, "u", "v", NULL))
+    }
+  )
+})
+
+test_that("append_reactive() and append_value() add an unnamed slot", {
+
+  with_session(
+    {
+      x <- reactives(a = reactiveVal(1))
+      r <- reactive(2)
+
+      expect_invisible(append_reactive(x, r))
+      expect_invisible(append_value(x, 3))
+      expect_identical(append_value(x, NULL), x)
+
+      expect_identical(names(x), c("a", "", "", ""))
+      expect_identical(x[2], r)
+      expect_s3_class(x[3], "reactiveVal")
+      expect_identical(as_values(x), list(a = 1, 2, 3, NULL))
+    }
+  )
+})
+
+test_that("appending makes the caller depend on nothing", {
+
+  with_session(
+    {
+      x <- reactive_vals()
+
+      runs <- 0
+      observe(
+        {
+          runs <<- runs + 1
+
+          if (runs <= 3) {
+            append_reactive(x, reactiveVal(runs))
+            append_value(x, runs)
+          }
+        }
+      )
+      session$flushReact()
+
+      x[[1]] <- 10
+      x[2] <- reactiveVal(20)
+      append_value(x, 30)
+      session$flushReact()
+
+      expect_identical(runs, 1)
+      expect_identical(as_values(x), list(10, 20, 30))
+    }
+  )
+})
+
+test_that("appending makes the checks of binding and writing", {
+
+  with_session(
+    {
+      x <- reactive_vals(a = 1)
+      y <- reactive_exprs(b = reactive(2))
+
+      expect_error(
+        append_reactive(x, reactive(3)),
+        class = "reactives_not_reactive_val"
+      )
+      expect_error(
+        append_reactive(y, reactiveVal(3)),
+        class = "reactives_not_reactive_expr"
+      )
+      expect_error(
+        append_reactive(reactives(), NULL),
+        class = "reactives_not_reactive"
+      )
+      expect_error(append_value(y, 3), class = "reactives_not_reactive_val")
+
+      expect_error(
+        append_reactive(list(), reactiveVal(3)),
+        class = "reactives_not_collection"
+      )
+      expect_error(append_value(list(), 3), class = "reactives_not_collection")
+
+      expect_identical(as_values(x), list(a = 1))
+      expect_identical(as_values(y), list(b = 2))
     }
   )
 })
@@ -1041,6 +1124,12 @@ test_that("printing or changing a destroyed collection fails", {
       expect_error(x$b <- 2, class = "shiny.destroyed.error")
       expect_error(x[[2]] <- 2, class = "shiny.destroyed.error")
 
+      expect_error(
+        append_reactive(x, reactiveVal(2)),
+        class = "shiny.destroyed.error"
+      )
+      expect_error(append_value(x, 2), class = "shiny.destroyed.error")
+
       expect_error(format(x), class = "shiny.destroyed.error")
       expect_error(print(x), class = "shiny.destroyed.error")
       expect_error(str(x), class = "shiny.destroyed.error")
@@ -1236,9 +1325,13 @@ test_that("writing a value labels its reactiveVal as reactive_vals() does", {
         x$a <- 1
         y[["b"]] <- 2
         y[[2]] <- 3
+        append_value(y, 4)
       }
     ),
-    c("reactives$a()", "reactive_vals$b()", "reactive_vals$...1()")
+    c(
+      "reactives$a()", "reactive_vals$b()", "reactive_vals$...1()",
+      "reactive_vals$...2()"
+    )
   )
 })
 

@@ -5,6 +5,8 @@
 \alias{reactive_vals}
 \alias{reactive_exprs}
 \alias{reorder.reactives}
+\alias{append_reactive}
+\alias{append_value}
 \alias{is_reactives}
 \alias{as_values}
 \alias{has_key}
@@ -18,6 +20,10 @@ reactive_vals(...)
 reactive_exprs(...)
 
 \method{reorder}{reactives}(x, order, ...)
+
+append_reactive(x, value)
+
+append_value(x, value)
 
 is_reactives(x)
 
@@ -38,16 +44,21 @@ values, including \code{NULL}, for \code{reactive_vals()}. Ignored by \code{reor
 \item{order}{The new order, listing every slot exactly once: by position, or
 by name when all slots are named.}
 
+\item{value}{For \code{append_reactive()}, the reactive to bind to the new slot,
+and for \code{append_value()}, the value for the new slot's
+\code{\link[shiny:reactiveVal]{shiny::reactiveVal()}} to hold.}
+
 \item{key}{The names of the slots to test for, none of them empty or
 missing.}
 }
 \value{
 A \code{reactives} object, or for \code{reactive_vals()} and \code{reactive_exprs()}
 an object of that class, which is also a \code{reactives} object. A snapshot
-has the class of \code{x}. The \code{reorder()} method returns \code{x}, invisibly,
-\code{as_values()} returns a list of the slots' values, in slot order and named
-as by \code{as.list()}, \code{has_key()} returns a logical vector with one element
-per name in \code{key}, and \code{is_reactives()} returns \code{TRUE} or \code{FALSE}.
+has the class of \code{x}. The \code{reorder()} method returns \code{x}, invisibly, and so
+do \code{append_reactive()} and \code{append_value()}. The \code{as_values()} function
+returns a list of the slots' values, in slot order and named as by
+\code{as.list()}, \code{has_key()} returns a logical vector with one element per
+name in \code{key}, and \code{is_reactives()} returns \code{TRUE} or \code{FALSE}.
 }
 \description{
 A \code{reactives} object is a keyed collection of shiny reactives, such as
@@ -99,9 +110,13 @@ that a stray value can't overwrite it; replacing its reactive takes \verb{[<-}.
 A \code{reactive_exprs} collection only holds such slots, and assigning a value
 to it with \verb{$<-} or \verb{[[<-} is an error even where there is no slot, so that
 a stray value can't add one either. As with reading, each assignment takes a
-single name or position. Slots can be unnamed; append one with
-\code{x[length(x) + 1] <- r} for a reactive \code{r}, or with
-\code{x[[length(x) + 1]] <- value} for a value.
+single name or position.
+
+Slots can be unnamed. To append one, bind a reactive \code{r} with
+\code{append_reactive(x, r)}, or write a value with \code{append_value(x, value)},
+which binds a new \code{\link[shiny:reactiveVal]{shiny::reactiveVal()}} holding it. The checks are those of
+binding and writing, so \code{append_value()} is an error for a \code{reactive_exprs}
+collection.
 
 Renaming with \verb{names<-} is an error, as it is for a
 \code{\link[shiny:reactiveValues]{shiny::reactiveValues()}} object. To rename a slot, bind its reactive under
@@ -111,8 +126,9 @@ the new name, remove the old slot and restore the order with \code{reorder()}.
 
 A collection is shared, like \code{\link[shiny:reactiveValues]{shiny::reactiveValues()}}: after \code{y <- x}, both
 names refer to the same collection, and a change made through \verb{[<-}, \verb{$<-},
-\verb{[[<-} or \code{reorder()} is seen by everything holding it. That is what lets
-one part of an app change a collection while another reacts to it.
+\verb{[[<-}, \code{reorder()}, \code{append_reactive()} or \code{append_value()} is seen by
+everything holding it. That is what lets one part of an app change a
+collection while another reacts to it.
 }
 
 \section{Lifetime}{
@@ -122,8 +138,8 @@ destroyed along with it, as a \code{\link[shiny:reactiveVal]{shiny::reactiveVal(
 it from another module doesn't tie it to that module, so destroying the
 module leaves the collection intact. A reactive bound to a slot, however,
 still belongs to the module it was created in, while the
-\code{\link[shiny:reactiveVal]{shiny::reactiveVal()}} that \verb{$<-} or \verb{[[<-} creates for a new slot belongs to
-the collection, whichever module writes the value.
+\code{\link[shiny:reactiveVal]{shiny::reactiveVal()}} that \verb{$<-}, \verb{[[<-} or \code{append_value()} creates for a
+new slot belongs to the collection, whichever module writes the value.
 
 To keep reading a collection after its \code{\link[shiny:testServer]{shiny::testServer()}} session has
 closed, a test can take a snapshot with \code{snapshot_reactives()} while the
@@ -168,11 +184,18 @@ when position 1 comes to hold a different reactive or none, since writing a
 check on \code{length()} keeps the observer from failing on an empty collection,
 which in an app would end the session.
 
-Binding, removing and writing make the caller depend on nothing. Writing a
-value through a slot's \code{\link[shiny:reactiveVal]{shiny::reactiveVal()}} leaves the slot bound to it,
-so the write re-runs only the readers of the slot's value, and only if the
-value changes. Writing a value where there is no slot binds a new one and
-re-runs readers as any binding does.
+Binding, removing and writing make the caller depend on nothing, and so does
+appending with \code{append_reactive()} or \code{append_value()}. Writing a value
+through a slot's \code{\link[shiny:reactiveVal]{shiny::reactiveVal()}} leaves the slot bound to it, so the
+write re-runs only the readers of the slot's value, and only if the value
+changes. Writing a value where there is no slot binds a new one and re-runs
+readers as any binding does.
+
+Assigning one past the last slot, as in \code{x[length(x) + 1] <- r} or
+\code{x[[length(x) + 1]] <- value}, appends as well, but the call to \code{length()}
+makes the caller depend on the number of slots, which the append then
+changes. An observer that appends this way re-runs after each append and
+appends again, without end.
 
 Printing, \code{format()} and \code{str()} make the caller depend on nothing, and they
 never call a slot, so they run no computed slot. Taking a snapshot also
@@ -194,8 +217,9 @@ single dependency on \code{reactives[]} instead of one per slot. The entry for a
 slot only appears once it has been read, and the one for the number of
 slots once \code{length()} has been called.
 
-Each \code{\link[shiny:reactiveVal]{shiny::reactiveVal()}} that \code{reactive_vals()}, \verb{$<-} or \verb{[[<-} creates
-for a value shows as the label of its slot followed by \verb{()},
+Each \code{\link[shiny:reactiveVal]{shiny::reactiveVal()}} that \code{reactive_vals()}, \verb{$<-}, \verb{[[<-} or
+\code{append_value()} creates for a value shows as the label of its slot followed
+by \verb{()},
 \code{reactive_vals$a()} for slot \code{a} and \code{reactive_vals$...1()} for the first
 unnamed slot, and the error for calling it once its module is destroyed
 names it the same way. The label names the slot the value was created for,
@@ -223,6 +247,11 @@ x["d"] <- shiny::reactive(10 * x$a)
 x["b"] <- NULL
 shiny::isolate(names(x))
 shiny::isolate(x$d)
+
+# Appending adds an unnamed slot
+append_value(x, 3)
+append_reactive(x, shiny::reactive(x$a + 1))
+shiny::isolate(as_values(x))
 
 y <- reactive_vals(n = 1, label = "one")
 shiny::isolate(y$label)
