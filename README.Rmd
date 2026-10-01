@@ -15,7 +15,7 @@ knitr::opts_chunk$set(
 
 <!-- badges: start -->
 [![ci](https://github.com/nbenn/reactives/actions/workflows/ci.yaml/badge.svg)](https://github.com/nbenn/reactives/actions/workflows/ci.yaml)
-[![covr](https://codecov.io/gh/nbenn/reactives/graph/badge.svg?token=S882X4B4YH)](https://codecov.io/gh/nbenn/reactives)
+[![covr](https://codecov.io/gh/nbenn/reactives/graph/badge.svg?token=S882X4B4YH)](https://app.codecov.io/gh/nbenn/reactives)
 <!-- badges: end -->
 
 Keyed collections of shiny reactives whose keys can be added, removed and reordered, with dependencies tracked per key.
