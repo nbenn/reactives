@@ -493,11 +493,11 @@ cell_label <- function(x, keys) {
   pos <- is_positional_key(keys)
   keys[pos] <- sub(positional_marker(), "...", keys[pos], fixed = TRUE)
 
-  paste0(class(x)[[1L]], "$", keys)
+  paste0(class(x)[[1L]], "$", keys, recycle0 = TRUE)
 }
 
 value_label <- function(x, keys) {
-  paste0(cell_label(x, keys), "()")
+  paste0(cell_label(x, keys), "()", recycle0 = TRUE)
 }
 
 get_slot <- function(x, key) {
