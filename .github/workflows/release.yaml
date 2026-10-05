@@ -1,0 +1,25 @@
+# The CRAN check flavours in blockr.ci, run on every push to a pull request
+# labelled `release`. The package is pure R, so the sanitizer, valgrind and rchk
+# flavours have nothing to check, while nosuggests catches a package in Suggests
+# that is used without a guard.
+#
+# No merge_group trigger, as in release-gate.yaml: this personal repository has
+# no merge queue.
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, labeled]
+
+name: release
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    if: >-
+      github.event.action != 'labeled' ||
+      github.event.label.name == 'release'
+    uses: BristolMyersSquibb/blockr.ci/.github/workflows/release.yaml@v0.1.1
+    with:
+      release-platforms: |
+        nosuggests
