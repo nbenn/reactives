@@ -4,11 +4,11 @@ Version: 0.1.0
 Authors@R:
     person("Nicolas", "Bennett", , "nicolas@cynkra.com",
            role = c("aut", "cre", "cph"))
-Description: Keyed collections of 'shiny' reactives whose keys can be
-    added, removed and reordered, with dependencies tracked per key. The
-    'shiny' package offers reactiveValues() for keyed stored values, but
-    it can neither remove nor reorder keys, and it has no keyed
-    collection of computed values.
+Description: Holds 'shiny' reactive values and reactive expressions under
+    keys that can be added, removed and reordered, with dependencies
+    tracked per key. The 'shiny' package offers reactiveValues() for keyed
+    stored values, but it can neither remove nor reorder keys, and it has
+    no keyed collection of computed values.
 License: GPL (>= 3)
 Encoding: UTF-8
 Language: en-US
