@@ -82,6 +82,14 @@ Under development. Planned work is tracked in the
 
 ## Installation
 
+Install the released version from CRAN:
+
+``` r
+install.packages("reactives")
+```
+
+Or the development version from GitHub:
+
 ``` r
 # install.packages("pak")
 pak::pak("nbenn/reactives")
