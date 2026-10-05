@@ -7,3 +7,6 @@
 ^\.Rproj\.user$
 ^LICENSE\.md$
 ^README\.(Rmd|html)$
+^cran-comments\.md$
+^\.git$
+^CRAN-SUBMISSION$

@@ -1,6 +1,6 @@
 Package: reactives
 Title: Keyed Collections of 'shiny' Reactives
-Version: 0.0.0.9000
+Version: 0.1.0
 Authors@R:
     person("Nicolas", "Bennett", , "nicolas@cynkra.com",
            role = c("aut", "cre", "cph"))
