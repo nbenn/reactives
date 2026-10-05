@@ -5,7 +5,7 @@
 \alias{reactives-package}
 \title{reactives: Keyed Collections of 'shiny' Reactives}
 \description{
-Keyed collections of 'shiny' reactives whose keys can be added, removed and reordered, with dependencies tracked per key. The 'shiny' package offers reactiveValues() for keyed stored values, but it can neither remove nor reorder keys, and it has no keyed collection of computed values.
+Holds 'shiny' reactive values and reactive expressions under keys that can be added, removed and reordered, with dependencies tracked per key. The 'shiny' package offers reactiveValues() for keyed stored values, but it can neither remove nor reorder keys, and it has no keyed collection of computed values.
 }
 \seealso{
 Useful links:
