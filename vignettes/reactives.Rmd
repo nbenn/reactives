@@ -241,3 +241,7 @@ testServer(
 
 as_values(snap)
 ```
+
+```{r, include = FALSE}
+reactiveConsole(FALSE)
+```
