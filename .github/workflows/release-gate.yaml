@@ -1,0 +1,24 @@
+# The cheap release checks in blockr.ci: the five release_checks() gates,
+# check_doc_fields(), spell_check(), README drift and URL/BugReports presence,
+# with url_check() and the --as-cran notes reported rather than gated. They run
+# on every push to a pull request labelled `release`, and report through one
+# sticky comment on it.
+#
+# The blockr repos also trigger on merge_group, where the gate passes through.
+# This personal repository has no merge queue, so it has no such ref.
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, labeled]
+
+name: release-gate
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  release-gate:
+    if: >-
+      github.event.action != 'labeled' ||
+      github.event.label.name == 'release'
+    uses: BristolMyersSquibb/blockr.ci/.github/workflows/release-gate.yaml@v0.1.1
