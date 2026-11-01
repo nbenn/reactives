@@ -1003,8 +1003,8 @@ test_that("str() shows the kind of each slot, laid out as for a list", {
   )
 
   expect_identical(
-    capture.output(str(list(y = reactive_vals(a = 1)))),
-    c("List of 1", " $ y:<reactive_vals[1]>", "  ..$ a: reactiveVal")
+    capture.output(str(reactive_vals(a = 1), indent.str = "  ..")),
+    c("<reactive_vals[1]>", "  ..$ a: reactiveVal")
   )
 
   expect_identical(capture.output(str(reactives())), "<reactives[0]>")
